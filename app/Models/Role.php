@@ -7,6 +7,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Role extends Model
 {
+    public const DEVELOPER_CODE = 'developer';
+    public const SUPER_ADMIN_CODE = 'super_admin';
+
+    protected function casts(): array
+    {
+        return [
+            'created_at' => 'datetime:Y-m-d H:i:s',
+            'updated_at' => 'datetime:Y-m-d H:i:s',
+        ];
+    }
+
     public function admins(): BelongsToMany
     {
         return $this->belongsToMany(Admin::class, 'admin_role', 'role_id', 'admin_id');
