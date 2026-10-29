@@ -1,6 +1,6 @@
 <script setup>
 import { apiRequest } from './api';
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
+import { nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { RouterView, useRoute, useRouter } from 'vue-router';
 import { pageRouteNames } from './router';
 import AdminLayout from './components/admin/AdminLayout.vue';
