@@ -9,6 +9,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use App\Models\Permission;
+use App\Models\Role;
 
 class AuthController extends Controller
 {
@@ -98,36 +100,79 @@ class AuthController extends Controller
         ]);
     }
 
-    /**
-     * @param Admin $admin
-     * @return array
-     */
     private function adminData(Admin $admin): array
     {
+        $admin->loadMissing('roles:id,code');
+
+        $roleCodes = $admin->roles->pluck('code')->filter()->values()->all();
+        $roleIds = $admin->roles
+            ->modelKeys();
+
+        $permissionCodes = [
+            'admin.admins.role-options:get',
+            'admin.roles.permissions.index:get',
+            'admin.roles.permissions.assign:put',
+            'admin.roles.permissions.revoke:delete',
+            'admin.admins.update:patch',
+            'admin.admins.password:patch',
+        ];
+
+        $permissions = Permission::query()
+            ->where('type', 3)
+            ->whereIn('permission_code', $permissionCodes)
+            ->with('roles:id')
+            ->get()
+            ->keyBy('permission_code');
+
+        $isDeveloper = in_array(Role::DEVELOPER_CODE, $roleCodes, true);
+        $isSuperAdmin = in_array(Role::SUPER_ADMIN_CODE, $roleCodes, true);
+
+        $hasApiPermission = function (string $permissionCode) use (
+            $isDeveloper,
+            $isSuperAdmin,
+            $roleIds,
+            $permissions,
+        ): bool {
+            if ($isDeveloper) {
+                return true;
+            }
+
+            $permission = $permissions->get($permissionCode);
+
+            if ($permission === null || $permission->developer_only) {
+                return false;
+            }
+
+            if ($isSuperAdmin) {
+                return true;
+            }
+
+            if ((int) $permission->status !== 1) {
+                return false;
+            }
+
+            if (! $permission->authorization_required) {
+                return true;
+            }
+
+            return $permission->roles->contains(
+                fn (Role $role): bool => in_array($role->getKey(), $roleIds, true),
+            );
+        };
+
         return [
             'id' => $admin->id,
             'name' => $admin->name,
             'email' => $admin->email,
-            'role_codes' => $admin->roles()
-                ->pluck('code')
-                ->filter()
-                ->values()
-                ->all(),
-            'can_view_admin_role_options' => $admin->hasApiPermission(
-                'admin.admins.role-options',
-                'GET',
+            'role_codes' => $roleCodes,
+            'can_view_admin_role_options' => $hasApiPermission(
+                'admin.admins.role-options:get',
             ),
-            'can_manage_role_permissions' => $admin->hasApiPermission('admin.roles.permissions.index', 'GET')
-                && $admin->hasApiPermission('admin.roles.permissions.assign', 'PUT')
-                && $admin->hasApiPermission('admin.roles.permissions.revoke', 'DELETE'),
-            'can_update_admins' => $admin->hasApiPermission(
-                'admin.admins.update',
-                'PATCH',
-            ),
-            'can_reset_admin_passwords' => $admin->hasApiPermission(
-                'admin.admins.password',
-                'PATCH',
-            ),
+            'can_manage_role_permissions' => $hasApiPermission('admin.roles.permissions.index:get')
+                && $hasApiPermission('admin.roles.permissions.assign:put')
+                && $hasApiPermission('admin.roles.permissions.revoke:delete'),
+            'can_update_admins' => $hasApiPermission('admin.admins.update:patch'),
+            'can_reset_admin_passwords' => $hasApiPermission('admin.admins.password:patch'),
         ];
     }
 }

@@ -43,7 +43,11 @@ class Admin extends Authenticatable
 
     public function hasApiPermission(string $routeName, string $method): bool
     {
-        if ($this->isDeveloper()) {
+        $this->loadMissing('roles:id,code');
+
+        $actorIsDeveloper = $this->roles->contains('code', Role::DEVELOPER_CODE);
+
+        if ($actorIsDeveloper) {
             return true;
         }
 
@@ -58,7 +62,7 @@ class Admin extends Authenticatable
             return false;
         }
 
-        if ($this->isSuperAdmin()) {
+        if ($this->roles->contains('code', Role::SUPER_ADMIN_CODE)) {
             return true;
         }
 

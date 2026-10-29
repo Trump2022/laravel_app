@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class RoleController extends Controller
 {
@@ -29,14 +30,19 @@ class RoleController extends Controller
             ->select(['id', 'name', 'code', 'remark'])
             ->orderBy('id');
 
-        if (! $actor->isDeveloper()) {
-            if ($actor->isSuperAdmin()) {
+        $actor->loadMissing('roles:id,code');
+
+        $actorIsDeveloper = $actor->roles->contains('code', Role::DEVELOPER_CODE);
+        $actorIsSuperAdmin = $actor->roles->contains('code', Role::SUPER_ADMIN_CODE);
+
+        if (! $actorIsDeveloper) {
+            if ($actorIsSuperAdmin) {
                 $query->where(function ($query): void {
                     $query->whereNull('code')
                         ->orWhere('code', '!=', Role::DEVELOPER_CODE);
                 });
             } else {
-                $query->whereIn('id', $actor->roles()->select('roles.id'));
+                $query->whereIn('id', $actor->roles->modelKeys());
             }
         }
 
@@ -156,7 +162,7 @@ class RoleController extends Controller
      * @param Role $role
      * @param Permission $permission
      * @return JsonResponse
-     * @throws \Throwable
+     * @throws Throwable
      */
     public function assignPermission(Request $request, Role $role, Permission $permission): JsonResponse
     {
@@ -240,7 +246,7 @@ class RoleController extends Controller
      * @param Role $role
      * @param Permission $permission
      * @return JsonResponse
-     * @throws \Throwable
+     * @throws Throwable
      */
     public function revokePermission(Request $request, Role $role, Permission $permission): JsonResponse
     {
@@ -334,14 +340,16 @@ class RoleController extends Controller
     private function getPermissionManagementContext(Request $request, Permission $permission): array
     {
         $admin = $request->user('admin');
-        $actorIsDeveloper = $admin->isDeveloper();
-        $actorIsSuperAdmin = $admin->isSuperAdmin();
+        $admin->loadMissing('roles:id,code');
+
+        $actorIsDeveloper = $admin->roles->contains('code', Role::DEVELOPER_CODE);
+        $actorIsSuperAdmin = $admin->roles->contains('code', Role::SUPER_ADMIN_CODE);
         $actorPermissionIds = [];
 
         if (! $actorIsDeveloper && ! $actorIsSuperAdmin) {
-            $actorPermissionIds = $admin->roles()
-                ->with('permissions:id')
-                ->get()
+            $admin->loadMissing('roles.permissions:id');
+
+            $actorPermissionIds = $admin->roles
                 ->flatMap(fn (Role $actorRole) => $actorRole->permissions->pluck('id'))
                 ->map(fn ($id): int => (int) $id)
                 ->unique()

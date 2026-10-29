@@ -82,17 +82,18 @@ class PermissionController extends Controller
             ->whereIn('type', [1, 2])
             ->where('status', 1);
 
-        $actorIsDeveloper = $admin->isDeveloper();
-        $actorIsSuperAdmin = $admin->isSuperAdmin();
+        $admin->loadMissing('roles:id,code');
+
+        $actorIsDeveloper = $admin->roles->contains('code', Role::DEVELOPER_CODE);
+        $actorIsSuperAdmin = $admin->roles->contains('code', Role::SUPER_ADMIN_CODE);
 
         if (! $actorIsDeveloper) {
             $query->where('developer_only', false);
         }
 
         if (! $actorIsDeveloper && ! $actorIsSuperAdmin) {
-            $assignedPermissionIds = $admin->roles()
-                ->with('permissions:id')
-                ->get()
+            $admin->loadMissing('roles.permissions:id');
+            $assignedPermissionIds = $admin->roles
                 ->flatMap(fn (Role $role) => $role->permissions->pluck('id'))
                 ->map(fn ($id): int => (int) $id)
                 ->unique()
@@ -249,22 +250,7 @@ class PermissionController extends Controller
         });
 
         return response()->json([
-            'data' => [
-                'id' => $permission->id,
-                'pid' => $permission->pid,
-                'id_path' => $permission->id_path,
-                'name' => $permission->name,
-                'icon' => $permission->icon,
-                'path' => $permission->path,
-                'component' => $permission->component,
-                'permission_code' => $permission->permission_code,
-                'type' => $permission->type,
-                'status' => $permission->status,
-                'authorization_required' => $permission->authorization_required,
-                'developer_only' => $permission->developer_only,
-                'sort' => $permission->sort,
-                'remark' => $permission->remark,
-            ],
+            'data' => $this->permissionData($permission),
         ], 201);
     }
 
@@ -413,22 +399,7 @@ class PermissionController extends Controller
         });
 
         return response()->json([
-            'data' => [
-                'id' => $permission->id,
-                'pid' => $permission->pid,
-                'id_path' => $permission->id_path,
-                'name' => $permission->name,
-                'icon' => $permission->icon,
-                'path' => $permission->path,
-                'component' => $permission->component,
-                'permission_code' => $permission->permission_code,
-                'type' => $permission->type,
-                'status' => $permission->status,
-                'authorization_required' => $permission->authorization_required,
-                'developer_only' => $permission->developer_only,
-                'sort' => $permission->sort,
-                'remark' => $permission->remark,
-            ],
+            'data' => $this->permissionData($permission),
         ]);
     }
 
@@ -520,6 +491,30 @@ class PermissionController extends Controller
     }
 
     /**
+     * @param Permission $permission
+     * @return array
+     */
+    private function permissionData(Permission $permission): array
+    {
+        return [
+            'id' => $permission->id,
+            'pid' => $permission->pid,
+            'id_path' => $permission->id_path,
+            'name' => $permission->name,
+            'icon' => $permission->icon,
+            'path' => $permission->path,
+            'component' => $permission->component,
+            'permission_code' => $permission->permission_code,
+            'type' => $permission->type,
+            'status' => $permission->status,
+            'authorization_required' => $permission->authorization_required,
+            'developer_only' => $permission->developer_only,
+            'sort' => $permission->sort,
+            'remark' => $permission->remark,
+        ];
+    }
+
+    /**
      * @param int $parentId
      * @return void
      */
@@ -571,16 +566,18 @@ class PermissionController extends Controller
             ->map(fn ($id): int => (int) $id)
             ->all();
 
-        $actorIsDeveloper = $admin->isDeveloper();
-        $actorIsSuperAdmin = $admin->isSuperAdmin();
+        $admin->loadMissing('roles:id,code');
+
+        $actorIsDeveloper = $admin->roles->contains('code', Role::DEVELOPER_CODE);
+        $actorIsSuperAdmin = $admin->roles->contains('code', Role::SUPER_ADMIN_CODE);
         $actorPermissionIds = [];
 
         // 普通管理员可操作的权限，来自其所有已关联角色所拥有权限的并集；
         // 开发者和超管按系统身份处理，不从自己的角色关联中推导操作范围。
         if (! $actorIsDeveloper && ! $actorIsSuperAdmin) {
-            $actorPermissionIds = $admin->roles()
-                ->with('permissions:id')
-                ->get()
+            $admin->loadMissing('roles.permissions:id');
+
+            $actorPermissionIds = $admin->roles
                 ->flatMap(fn (Role $actorRole) => $actorRole->permissions->pluck('id'))
                 ->map(fn ($id): int => (int) $id)
                 ->unique()

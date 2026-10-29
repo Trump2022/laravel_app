@@ -11,48 +11,48 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
-})->middleware('auth:sanctum');
+})->middleware('auth:sanctum'); // 获取当前 Sanctum 用户信息
 
 Route::prefix('admin')->name('admin.')->group(function () {
-    Route::post('login', [AuthController::class, 'login'])->name('login');
+    Route::post('login', [AuthController::class, 'login'])->name('login'); // 管理员登录
 
     Route::middleware(['auth:admin', EnsureAdminIsActive::class])->group(function () {
-        Route::post('logout', [AuthController::class, 'logout'])->name('logout');
+        Route::post('logout', [AuthController::class, 'logout'])->name('logout'); // 管理员退出登录
 
-        Route::get('me', [AuthController::class, 'me'])->name('me');
-        Route::get('menu/tree', [PermissionController::class, 'menuTree'])->name('menu.tree');
+        Route::get('me', [AuthController::class, 'me'])->name('me'); // 获取当前管理员信息及能力
+        Route::get('menu/tree', [PermissionController::class, 'menuTree'])->name('menu.tree'); // 获取当前管理员可见的菜单树
 
         Route::middleware(CheckAdminPermission::class)->group(function () {
             Route::get('dashboard/index', function () {
                 return response()->json([
                     'message' => '后台仪表盘',
                 ]);
-            })->name('dashboard.index');
-            Route::get('permissions', [PermissionController::class, 'index'])->name('permissions.index');
-            Route::get('roles/{role}/permissions', [PermissionController::class, 'rolePermissions'])->name('roles.permissions.index');
-            Route::put('roles/{role}/permissions/{permission}', [RoleController::class, 'assignPermission'])->name('roles.permissions.assign');
-            Route::delete('roles/{role}/permissions/{permission}', [RoleController::class, 'revokePermission'])->name('roles.permissions.revoke');
-            Route::get('roles', [RoleController::class, 'index'])->name('roles.index');
-            Route::post('roles', [RoleController::class, 'store'])->name('roles.store');
-            Route::patch('roles/{role}', [RoleController::class, 'update'])->name('roles.update');
+            })->name('dashboard.index'); // 获取后台仪表盘数据
+            Route::get('permissions', [PermissionController::class, 'index'])->name('permissions.index'); // 获取权限列表
+            Route::get('roles/{role}/permissions', [PermissionController::class, 'rolePermissions'])->name('roles.permissions.index'); // 获取角色的权限及可管理权限
+            Route::put('roles/{role}/permissions/{permission}', [RoleController::class, 'assignPermission'])->name('roles.permissions.assign'); // 为角色分配权限
+            Route::delete('roles/{role}/permissions/{permission}', [RoleController::class, 'revokePermission'])->name('roles.permissions.revoke'); // 移除角色的权限
+            Route::get('roles', [RoleController::class, 'index'])->name('roles.index'); // 获取角色列表
+            Route::post('roles', [RoleController::class, 'store'])->name('roles.store'); // 创建角色
+            Route::patch('roles/{role}', [RoleController::class, 'update'])->name('roles.update'); // 更新角色信息
 
-            Route::get('admins', [AdminController::class, 'index'])->name('admins.index');
-            Route::post('admins', [AdminController::class, 'store'])->name('admins.store');
-            Route::patch('admins/{admin}', [AdminController::class, 'update'])->name('admins.update');
-            Route::patch('admins/{admin}/status', [AdminController::class, 'updateStatus'])->name('admins.status');
-            Route::patch('admins/{admin}/password', [AdminController::class, 'updatePassword'])->name('admins.password');
-            Route::put('admins/{admin}/roles/{role}', [AdminController::class, 'assignRole'])->name('admins.roles.assign');
-            Route::delete('admins/{admin}/roles/{role}', [AdminController::class, 'revokeRole'])->name('admins.roles.revoke');
-            Route::get('admins/{admin}/role-options', [AdminController::class, 'roleOptions'])->name('admins.role-options');
+            Route::get('admins', [AdminController::class, 'index'])->name('admins.index'); // 获取管理员列表
+            Route::post('admins', [AdminController::class, 'store'])->name('admins.store'); // 创建管理员
+            Route::patch('admins/{admin}', [AdminController::class, 'update'])->name('admins.update'); // 更新管理员信息
+            Route::patch('admins/{admin}/status', [AdminController::class, 'updateStatus'])->name('admins.status'); // 启用或停用管理员
+            Route::patch('admins/{admin}/password', [AdminController::class, 'updatePassword'])->name('admins.password'); // 重置管理员密码
+            Route::put('admins/{admin}/roles/{role}', [AdminController::class, 'assignRole'])->name('admins.roles.assign'); // 为管理员分配角色
+            Route::delete('admins/{admin}/roles/{role}', [AdminController::class, 'revokeRole'])->name('admins.roles.revoke'); // 移除管理员角色
+            Route::get('admins/{admin}/role-options', [AdminController::class, 'roleOptions'])->name('admins.role-options'); // 获取管理员可分配及已拥有的角色
 
-            Route::post('permissions', [PermissionController::class, 'store'])->name('permissions.store');
-            Route::get('permissions/tree', [PermissionController::class, 'tree'])->name('permissions.tree');
-            Route::patch('permissions/{permission}', [PermissionController::class, 'update'])->name('permissions.update');
-            Route::delete('permissions/{permission}', [PermissionController::class, 'destroy'])->name('permissions.destroy');
-            Route::patch('permissions/{permission}/move', [PermissionController::class, 'move'])->name('permissions.move');
+            Route::post('permissions', [PermissionController::class, 'store'])->name('permissions.store'); // 创建权限
+            Route::get('permissions/tree', [PermissionController::class, 'tree'])->name('permissions.tree'); // 获取权限树及可选父级
+            Route::patch('permissions/{permission}', [PermissionController::class, 'update'])->name('permissions.update'); // 更新权限
+            Route::delete('permissions/{permission}', [PermissionController::class, 'destroy'])->name('permissions.destroy'); // 删除权限
+            Route::patch('permissions/{permission}/move', [PermissionController::class, 'move'])->name('permissions.move'); // 调整权限节点顺序
 
         });
 
-        Route::patch('me/password', [AuthController::class, 'updateOwnPassword'])->name('me.password');
+        Route::patch('me/password', [AuthController::class, 'updateOwnPassword'])->name('me.password'); // 修改当前管理员密码
     });
 });
