@@ -12,6 +12,10 @@ use Illuminate\Validation\ValidationException;
 
 class AdminController extends Controller
 {
+    /**
+     * @param Request $request
+     * @return JsonResponse
+     */
     public function index(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -64,6 +68,11 @@ class AdminController extends Controller
         return response()->json($admins);
     }
 
+    /**
+     * @param Request $request
+     * @param Admin $admin
+     * @return JsonResponse
+     */
     public function roleOptions(Request $request, Admin $admin): JsonResponse
     {
         $actor = $this->authorizeRoleManagement($request, $admin);
@@ -152,6 +161,12 @@ class AdminController extends Controller
         ]);
     }
 
+    /**
+     * @param Request $request
+     * @param Admin $admin
+     * @param Role $role
+     * @return JsonResponse
+     */
     public function assignRole(Request $request, Admin $admin, Role $role): JsonResponse
     {
         $actor = $this->authorizeRoleManagement($request, $admin);
@@ -195,6 +210,12 @@ class AdminController extends Controller
         ]);
     }
 
+    /**
+     * @param Request $request
+     * @param Admin $admin
+     * @param Role $role
+     * @return JsonResponse
+     */
     public function revokeRole(Request $request, Admin $admin, Role $role): JsonResponse
     {
         $actor = $this->authorizeRoleManagement($request, $admin);
@@ -226,6 +247,11 @@ class AdminController extends Controller
         ]);
     }
 
+    /**
+     * @param Request $request
+     * @param Admin $admin
+     * @return Admin
+     */
     private function authorizeRoleManagement(Request $request, Admin $admin): Admin
     {
         $actor = $request->user('admin');
@@ -255,6 +281,11 @@ class AdminController extends Controller
         return $actor;
     }
 
+    /**
+     * @param Admin $admin
+     * @param Role $role
+     * @return bool
+     */
     private function adminHasRole(Admin $admin, Role $role): bool
     {
         return $admin->roles()
@@ -262,12 +293,20 @@ class AdminController extends Controller
             ->exists();
     }
 
+    /**
+     * @param Admin $admin
+     * @return bool
+     */
     private function adminCanManageRoles(Admin $admin): bool
     {
         return $admin->hasApiPermission('admin.admins.roles.assign', 'PUT')
             || $admin->hasApiPermission('admin.admins.roles.revoke', 'DELETE');
     }
 
+    /**
+     * @param Role $role
+     * @return bool
+     */
     private function isExclusiveRole(Role $role): bool
     {
         return in_array($role->code, [
@@ -276,6 +315,10 @@ class AdminController extends Controller
         ], true);
     }
 
+    /**
+     * @param Admin $admin
+     * @return array
+     */
     private function adminData(Admin $admin): array
     {
         $admin->loadMissing('roles:id,name,code');
@@ -303,6 +346,10 @@ class AdminController extends Controller
         ];
     }
 
+    /**
+     * @param Admin $admin
+     * @return int
+     */
     private function adminPrivilegeLevel(Admin $admin): int
     {
         if ($admin->isDeveloper()) {
@@ -312,6 +359,11 @@ class AdminController extends Controller
         return $admin->isSuperAdmin() ? 1 : 0;
     }
 
+    /**
+     * @param Admin $actor
+     * @param Admin $target
+     * @return bool
+     */
     private function canDisableAdmin(Admin $actor, Admin $target): bool
     {
         if ($actor->getKey() === $target->getKey()) {
@@ -327,6 +379,11 @@ class AdminController extends Controller
             || $this->adminPrivilegeLevel($target) < $this->adminPrivilegeLevel($actor);
     }
 
+    /**
+     * @param Admin $actor
+     * @param Admin $target
+     * @return bool
+     */
     private function canManageAdminProfile(Admin $actor, Admin $target): bool
     {
         if (! $actor->hasApiPermission('admin.admins.update', 'PATCH')) {
@@ -337,6 +394,11 @@ class AdminController extends Controller
             || ! $this->targetHasEqualOrHigherPasswordResetPrivilege($actor, $target);
     }
 
+    /**
+     * @param Admin $actor
+     * @param Admin $target
+     * @return bool
+     */
     private function canResetAdminPassword(Admin $actor, Admin $target): bool
     {
         if (! $actor->hasApiPermission('admin.admins.password', 'PATCH')) {
@@ -347,6 +409,11 @@ class AdminController extends Controller
             && ! $this->targetHasEqualOrHigherPasswordResetPrivilege($actor, $target);
     }
 
+    /**
+     * @param Admin $actor
+     * @param Admin $target
+     * @return bool
+     */
     private function targetHasEqualOrHigherPasswordResetPrivilege(Admin $actor, Admin $target): bool
     {
         if (! $target->hasApiPermission('admin.admins.password', 'PATCH')) {
@@ -359,6 +426,10 @@ class AdminController extends Controller
         return $targetLevel >= $actorLevel;
     }
 
+    /**
+     * @param Request $request
+     * @return JsonResponse
+     */
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -375,6 +446,11 @@ class AdminController extends Controller
         ], 201);
     }
 
+    /**
+     * @param Request $request
+     * @param Admin $admin
+     * @return JsonResponse
+     */
     public function update(Request $request, Admin $admin): JsonResponse
     {
         $validated = $request->validate([
@@ -405,6 +481,11 @@ class AdminController extends Controller
         ]);
     }
 
+    /**
+     * @param Request $request
+     * @param Admin $admin
+     * @return JsonResponse
+     */
     public function updatePassword(Request $request, Admin $admin): JsonResponse
     {
         $validated = $request->validate([
@@ -431,6 +512,11 @@ class AdminController extends Controller
         ]);
     }
 
+    /**
+     * @param Request $request
+     * @param Admin $admin
+     * @return JsonResponse
+     */
     public function updateStatus(Request $request, Admin $admin): JsonResponse
     {
         $validated = $request->validate([

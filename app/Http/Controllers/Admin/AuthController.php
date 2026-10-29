@@ -12,6 +12,10 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
+    /**
+     * @param Request $request
+     * @return JsonResponse
+     */
     public function login(Request $request): JsonResponse
     {
         $credentials = $request->validate([
@@ -42,6 +46,10 @@ class AuthController extends Controller
         return response()->json($this->adminData($admin));
     }
 
+    /**
+     * @param Request $request
+     * @return JsonResponse
+     */
     public function logout(Request $request): JsonResponse
     {
         Auth::guard('admin')->logout();
@@ -52,6 +60,10 @@ class AuthController extends Controller
         ]);
     }
 
+    /**
+     * @param Request $request
+     * @return JsonResponse
+     */
     public function me(Request $request): JsonResponse
     {
         $admin = $request->user('admin');
@@ -59,6 +71,10 @@ class AuthController extends Controller
         return response()->json($this->adminData($admin));
     }
 
+    /**
+     * @param Request $request
+     * @return JsonResponse
+     */
     public function updateOwnPassword(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -82,6 +98,10 @@ class AuthController extends Controller
         ]);
     }
 
+    /**
+     * @param Admin $admin
+     * @return array
+     */
     private function adminData(Admin $admin): array
     {
         return [

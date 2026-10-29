@@ -13,6 +13,10 @@ use Illuminate\Validation\ValidationException;
 
 class RoleController extends Controller
 {
+    /**
+     * @param Request $request
+     * @return JsonResponse
+     */
     public function index(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -51,6 +55,10 @@ class RoleController extends Controller
         );
     }
 
+    /**
+     * @param Request $request
+     * @return JsonResponse
+     */
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -84,6 +92,11 @@ class RoleController extends Controller
         ], 201);
     }
 
+    /**
+     * @param Request $request
+     * @param Role $role
+     * @return JsonResponse
+     */
     public function update(Request $request, Role $role): JsonResponse
     {
         $codeRules = [
@@ -139,6 +152,10 @@ class RoleController extends Controller
     }
 
     /**
+     * @param Request $request
+     * @param Role $role
+     * @param Permission $permission
+     * @return JsonResponse
      * @throws \Throwable
      */
     public function assignPermission(Request $request, Role $role, Permission $permission): JsonResponse
@@ -152,30 +169,8 @@ class RoleController extends Controller
             ]);
         }
 
-        $admin = $request->user('admin');
-        $actorIsDeveloper = $admin->isDeveloper();
-        $actorIsSuperAdmin = $admin->isSuperAdmin();
-        $actorPermissionIds = [];
-
-        if (! $actorIsDeveloper && ! $actorIsSuperAdmin) {
-            $actorPermissionIds = $admin->roles()
-                ->with('permissions:id')
-                ->get()
-                ->flatMap(fn (Role $actorRole) => $actorRole->permissions->pluck('id'))
-                ->map(fn ($id): int => (int) $id)
-                ->unique()
-                ->values()
-                ->all();
-        }
-
-        $canAssignPermission = $actorIsDeveloper
-            || (
-                ! $permission->developer_only
-                && (
-                    $actorIsSuperAdmin
-                    || in_array((int) $permission->id, $actorPermissionIds, true)
-                )
-            );
+        [$canAssignPermission, $actorIsDeveloper, $actorIsSuperAdmin, $actorPermissionIds]
+            = $this->getPermissionManagementContext($request, $permission);
 
         if (! $canAssignPermission) {
             abort(403, '无权分配此权限。');
@@ -241,6 +236,10 @@ class RoleController extends Controller
     }
 
     /**
+     * @param Request $request
+     * @param Role $role
+     * @param Permission $permission
+     * @return JsonResponse
      * @throws \Throwable
      */
     public function revokePermission(Request $request, Role $role, Permission $permission): JsonResponse
@@ -248,30 +247,8 @@ class RoleController extends Controller
         $this->ensureRoleCanManagePermissions($role);
         $this->ensurePermissionCanBeAssigned($permission);
 
-        $admin = $request->user('admin');
-        $actorIsDeveloper = $admin->isDeveloper();
-        $actorIsSuperAdmin = $admin->isSuperAdmin();
-        $actorPermissionIds = [];
-
-        if (! $actorIsDeveloper && ! $actorIsSuperAdmin) {
-            $actorPermissionIds = $admin->roles()
-                ->with('permissions:id')
-                ->get()
-                ->flatMap(fn (Role $actorRole) => $actorRole->permissions->pluck('id'))
-                ->map(fn ($id): int => (int) $id)
-                ->unique()
-                ->values()
-                ->all();
-        }
-
-        $canRevokePermission = $actorIsDeveloper
-            || (
-                ! $permission->developer_only
-                && (
-                    $actorIsSuperAdmin
-                    || in_array((int) $permission->id, $actorPermissionIds, true)
-                )
-            );
+        [$canRevokePermission, $actorIsDeveloper, $actorIsSuperAdmin, $actorPermissionIds]
+            = $this->getPermissionManagementContext($request, $permission);
 
         if (! $canRevokePermission) {
             abort(403, '无权撤销此权限。');
@@ -322,6 +299,10 @@ class RoleController extends Controller
         ]);
     }
 
+    /**
+     * @param Role $role
+     * @return void
+     */
     private function ensureRoleCanManagePermissions(Role $role): void
     {
         if (in_array($role->code, [
@@ -332,6 +313,10 @@ class RoleController extends Controller
         }
     }
 
+    /**
+     * @param Permission $permission
+     * @return void
+     */
     private function ensurePermissionCanBeAssigned(Permission $permission): void
     {
         if (! $permission->authorization_required) {
@@ -339,5 +324,45 @@ class RoleController extends Controller
                 'permission' => '该权限不需要角色授权，不能修改角色关联。',
             ]);
         }
+    }
+
+    /**
+     * @param Request $request
+     * @param Permission $permission
+     * @return array
+     */
+    private function getPermissionManagementContext(Request $request, Permission $permission): array
+    {
+        $admin = $request->user('admin');
+        $actorIsDeveloper = $admin->isDeveloper();
+        $actorIsSuperAdmin = $admin->isSuperAdmin();
+        $actorPermissionIds = [];
+
+        if (! $actorIsDeveloper && ! $actorIsSuperAdmin) {
+            $actorPermissionIds = $admin->roles()
+                ->with('permissions:id')
+                ->get()
+                ->flatMap(fn (Role $actorRole) => $actorRole->permissions->pluck('id'))
+                ->map(fn ($id): int => (int) $id)
+                ->unique()
+                ->values()
+                ->all();
+        }
+
+        $canManagePermission = $actorIsDeveloper
+            || (
+                ! $permission->developer_only
+                && (
+                    $actorIsSuperAdmin
+                    || in_array((int) $permission->id, $actorPermissionIds, true)
+                )
+            );
+
+        return [
+            $canManagePermission,
+            $actorIsDeveloper,
+            $actorIsSuperAdmin,
+            $actorPermissionIds,
+        ];
     }
 }

@@ -12,9 +12,14 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Throwable;
+use Illuminate\Database\Eloquent\Builder;
 
 class PermissionController extends Controller
 {
+    /**
+     * @param Request $request
+     * @return JsonResponse
+     */
     public function index(Request $request): JsonResponse
     {
         $admin = $request->user('admin');
@@ -33,6 +38,10 @@ class PermissionController extends Controller
         ]);
     }
 
+    /**
+     * @param Request $request
+     * @return JsonResponse
+     */
     public function tree(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -45,22 +54,7 @@ class PermissionController extends Controller
         if (! $admin->isDeveloper()) {
             $query->where('developer_only', false);
         }
-
-        $permissions = $query
-            ->orderBy('sort')
-            ->orderBy('id')
-            ->get();
-
-        $items = [];
-        $childrenIds = [];
-
-        foreach ($permissions as $permission) {
-            $id = (int) $permission->id;
-            $pid = (int) $permission->pid;
-
-            $items[$id] = $permission->toArray();
-            $childrenIds[$pid][] = $id;
-        }
+        [$items, $childrenIds] = $this->getItemsAndChildrenIds($query);
 
         $excludeId = isset($validated['exclude_id'])
             ? (int) $validated['exclude_id']
@@ -76,6 +70,10 @@ class PermissionController extends Controller
         ]);
     }
 
+    /**
+     * @param Request $request
+     * @return JsonResponse
+     */
     public function menuTree(Request $request): JsonResponse
     {
         $admin = $request->user('admin');
@@ -107,7 +105,23 @@ class PermissionController extends Controller
                     ->orWhereIn('id', $assignedPermissionIds);
             });
         }
+        [$items, $childrenIds] = $this->getItemsAndChildrenIds($query);
 
+        return response()->json([
+            'data' => $this->buildPermissionTree(
+                $childrenIds[0] ?? [],
+                $childrenIds,
+                $items,
+            ),
+        ]);
+    }
+
+    /**
+     * @param Builder $query
+     * @return array[]
+     */
+    private function getItemsAndChildrenIds(Builder $query): array
+    {
         $permissions = $query
             ->orderBy('sort')
             ->orderBy('id')
@@ -123,14 +137,7 @@ class PermissionController extends Controller
             $items[$id] = $permission->toArray();
             $childrenIds[$pid][] = $id;
         }
-
-        return response()->json([
-            'data' => $this->buildPermissionTree(
-                $childrenIds[0] ?? [],
-                $childrenIds,
-                $items,
-            ),
-        ]);
+        return [$items, $childrenIds];
     }
 
     /**
@@ -162,6 +169,11 @@ class PermissionController extends Controller
         return $tree;
     }
 
+    /**
+     * @param Request $request
+     * @return JsonResponse
+     * @throws Throwable
+     */
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -257,6 +269,9 @@ class PermissionController extends Controller
     }
 
     /**
+     * @param Request $request
+     * @param Permission $permission
+     * @return JsonResponse
      * @throws Throwable
      */
     public function update(Request $request, Permission $permission): JsonResponse
@@ -418,6 +433,8 @@ class PermissionController extends Controller
     }
 
     /**
+     * @param Permission $permission
+     * @return Response
      * @throws Throwable
      */
     public function destroy(Permission $permission): Response
@@ -447,6 +464,9 @@ class PermissionController extends Controller
     }
 
     /**
+     * @param Request $request
+     * @param Permission $permission
+     * @return JsonResponse
      * @throws Throwable
      */
     public function move(Request $request, Permission $permission): JsonResponse
@@ -499,6 +519,10 @@ class PermissionController extends Controller
         ]);
     }
 
+    /**
+     * @param int $parentId
+     * @return void
+     */
     private function resetSiblingSorts(int $parentId): void
     {
         $siblings = Permission::query()
@@ -515,6 +539,10 @@ class PermissionController extends Controller
         }
     }
 
+    /**
+     * @param Role $role
+     * @return bool
+     */
     private function isProtectedRole(Role $role): bool
     {
         return in_array($role->code, [
@@ -523,6 +551,11 @@ class PermissionController extends Controller
         ], true);
     }
 
+    /**
+     * @param Request $request
+     * @param Role $role
+     * @return JsonResponse
+     */
     public function rolePermissions(Request $request, Role $role): JsonResponse
     {
         // 开发者和超管角色的权限固定，不通过普通角色权限编辑入口修改。
