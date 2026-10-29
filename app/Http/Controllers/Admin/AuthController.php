@@ -3,11 +3,12 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Admin;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
@@ -20,7 +21,7 @@ class AuthController extends Controller
 
         if (! Auth::guard('admin')->attempt($credentials)) {
             throw ValidationException::withMessages([
-                'email' => ['The provided credentials are incorrect.']
+                'email' => ['邮箱或密码错误。'],
             ]);
         }
 
@@ -32,25 +33,22 @@ class AuthController extends Controller
             $request->session()->regenerateToken();
 
             throw ValidationException::withMessages([
-                'email' => ['The provided credentials are incorrect.'],
+                'email' => ['邮箱或密码错误。'],
             ]);
         }
 
         $request->session()->regenerate();
 
-        return response()->json([
-            'id' => $admin->id,
-            'name' => $admin->name,
-            'email' => $admin->email,
-        ]);
+        return response()->json($this->adminData($admin));
     }
 
     public function logout(Request $request): JsonResponse
     {
         Auth::guard('admin')->logout();
         $request->session()->regenerate();
+
         return response()->json([
-           'message' => 'Logged out.'
+            'message' => '已退出登录。',
         ]);
     }
 
@@ -58,11 +56,7 @@ class AuthController extends Controller
     {
         $admin = $request->user('admin');
 
-        return response()->json([
-            'id' => $admin->getAuthIdentifier(),
-            'name' => $admin->name,
-            'email' => $admin->email,
-        ]);
+        return response()->json($this->adminData($admin));
     }
 
     public function updateOwnPassword(Request $request): JsonResponse
@@ -76,7 +70,7 @@ class AuthController extends Controller
 
         if (! Hash::check($validated['current_password'], $admin->password)) {
             throw ValidationException::withMessages([
-                'current_password' => ['The current password is incorrect.'],
+                'current_password' => ['当前密码不正确。'],
             ]);
         }
 
@@ -84,7 +78,36 @@ class AuthController extends Controller
         $admin->save();
 
         return response()->json([
-            'message' => 'Password changed successfully.',
+            'message' => '密码修改成功。',
         ]);
+    }
+
+    private function adminData(Admin $admin): array
+    {
+        return [
+            'id' => $admin->id,
+            'name' => $admin->name,
+            'email' => $admin->email,
+            'role_codes' => $admin->roles()
+                ->pluck('code')
+                ->filter()
+                ->values()
+                ->all(),
+            'can_view_admin_role_options' => $admin->hasApiPermission(
+                'admin.admins.role-options',
+                'GET',
+            ),
+            'can_manage_role_permissions' => $admin->hasApiPermission('admin.roles.permissions.index', 'GET')
+                && $admin->hasApiPermission('admin.roles.permissions.assign', 'PUT')
+                && $admin->hasApiPermission('admin.roles.permissions.revoke', 'DELETE'),
+            'can_update_admins' => $admin->hasApiPermission(
+                'admin.admins.update',
+                'PATCH',
+            ),
+            'can_reset_admin_passwords' => $admin->hasApiPermission(
+                'admin.admins.password',
+                'PATCH',
+            ),
+        ];
     }
 }

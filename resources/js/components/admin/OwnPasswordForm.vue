@@ -50,8 +50,7 @@ async function submit() {
 <template>
     <form
         class="mx-auto mt-6 grid max-w-6xl gap-4 rounded-xl border border-blue-200 bg-blue-50 p-5 sm:grid-cols-3"
-        @submit.prevent="submit"
-    >
+        @submit.prevent="submit" >
         <h2 class="font-semibold sm:col-span-3">修改我的密码</h2>
 
         <label>
@@ -97,8 +96,7 @@ async function submit() {
             <button
                 type="submit"
                 :disabled="changingPassword"
-                class="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50"
-            >
+                class="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50" >
                 {{ changingPassword ? '提交中…' : '确认修改密码' }}
             </button>
 
@@ -106,8 +104,7 @@ async function submit() {
                 type="button"
                 :disabled="changingPassword"
                 class="rounded border border-slate-300 bg-white px-4 py-2 text-slate-700 disabled:opacity-50"
-                @click="cancel"
-            >
+                @click="cancel" >
                 取消
             </button>
         </div>

@@ -3,23 +3,52 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Permission;
 use App\Models\Role;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class RoleController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $roles = Role::query()
-            ->select(['id', 'name', 'code', 'remark'])
-            ->orderBy('id')
-            ->get();
-
-        return response()->json([
-            'data' => $roles,
+        $validated = $request->validate([
+            'search' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ]);
+
+        $actor = $request->user('admin');
+        $query = Role::query()
+            ->select(['id', 'name', 'code', 'remark'])
+            ->orderBy('id');
+
+        if (! $actor->isDeveloper()) {
+            if ($actor->isSuperAdmin()) {
+                $query->where(function ($query): void {
+                    $query->whereNull('code')
+                        ->orWhere('code', '!=', Role::DEVELOPER_CODE);
+                });
+            } else {
+                $query->whereIn('id', $actor->roles()->select('roles.id'));
+            }
+        }
+
+        $search = trim($validated['search'] ?? '');
+
+        if ($search !== '') {
+            $query->where(function ($query) use ($search): void {
+                $query->where('name', 'like', "%{$search}%")
+                    ->orWhere('code', 'like', "%{$search}%")
+                    ->orWhere('remark', 'like', "%{$search}%");
+            });
+        }
+
+        return response()->json(
+            $query->paginate($validated['per_page'] ?? 10)->withQueryString(),
+        );
     }
 
     public function store(Request $request): JsonResponse
@@ -39,7 +68,7 @@ class RoleController extends Controller
             'remark' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $role = new Role();
+        $role = new Role;
         $role->name = $validated['name'];
         $role->code = $validated['code'] ?? null;
         $role->remark = $validated['remark'] ?? null;
@@ -86,7 +115,6 @@ class RoleController extends Controller
             'remark' => ['sometimes', 'nullable', 'string', 'max:255'],
         ]);
 
-        // $role->fill($validated);
         if (array_key_exists('name', $validated)) {
             $role->name = $validated['name'];
         }
@@ -108,5 +136,208 @@ class RoleController extends Controller
                 'remark' => $role->remark,
             ],
         ]);
+    }
+
+    /**
+     * @throws \Throwable
+     */
+    public function assignPermission(Request $request, Role $role, Permission $permission): JsonResponse
+    {
+        $this->ensureRoleCanManagePermissions($role);
+        $this->ensurePermissionCanBeAssigned($permission);
+
+        if ((int) $permission->status !== 1) {
+            throw ValidationException::withMessages([
+                'permission' => '已停用的权限不能分配给角色。',
+            ]);
+        }
+
+        $admin = $request->user('admin');
+        $actorIsDeveloper = $admin->isDeveloper();
+        $actorIsSuperAdmin = $admin->isSuperAdmin();
+        $actorPermissionIds = [];
+
+        if (! $actorIsDeveloper && ! $actorIsSuperAdmin) {
+            $actorPermissionIds = $admin->roles()
+                ->with('permissions:id')
+                ->get()
+                ->flatMap(fn (Role $actorRole) => $actorRole->permissions->pluck('id'))
+                ->map(fn ($id): int => (int) $id)
+                ->unique()
+                ->values()
+                ->all();
+        }
+
+        $canAssignPermission = $actorIsDeveloper
+            || (
+                ! $permission->developer_only
+                && (
+                    $actorIsSuperAdmin
+                    || in_array((int) $permission->id, $actorPermissionIds, true)
+                )
+            );
+
+        if (! $canAssignPermission) {
+            abort(403, '无权分配此权限。');
+        }
+
+        $permissionIds = [];
+
+        if (in_array((int) $permission->type, [1, 2], true)) {
+            $ancestorIds = array_values(array_unique(array_filter(
+                array_map('intval', explode(',', $permission->id_path)),
+                fn (int $id): bool => $id > 0,
+            )));
+
+            $ancestors = Permission::query()
+                ->whereIn('id', $ancestorIds)
+                ->get()
+                ->keyBy('id');
+
+            if ($ancestors->count() !== count($ancestorIds)) {
+                throw ValidationException::withMessages([
+                    'permission' => '权限的上级节点不存在，无法分配。',
+                ]);
+            }
+
+            // 操作者身份和可分配权限已在上方计算；这里只用它们筛选自动补齐的上级权限。
+
+            foreach ($ancestorIds as $ancestorId) {
+                $ancestor = $ancestors->get($ancestorId);
+
+                if (
+                    ! in_array((int) $ancestor->type, [1, 2], true)
+                    || ! $ancestor->authorization_required
+                    || (int) $ancestor->status !== 1
+                    || (! $actorIsDeveloper && $ancestor->developer_only)
+                    || (
+                        ! $actorIsDeveloper
+                        && ! $actorIsSuperAdmin
+                        && ! in_array($ancestorId, $actorPermissionIds, true)
+                    )
+                ) {
+                    continue;
+                }
+
+                $permissionIds[] = $ancestorId;
+            }
+        }
+
+        $permissionIds[] = $permission->id;
+        $permissionIds = array_values(array_unique($permissionIds));
+
+        DB::transaction(function () use ($role, $permissionIds): void {
+            $role->permissions()->syncWithoutDetaching($permissionIds);
+        });
+
+        return response()->json([
+            'data' => [
+                'role_id' => $role->id,
+                'permission_id' => $permission->id,
+                'assigned' => true,
+                'assigned_permission_ids' => $permissionIds,
+            ],
+        ]);
+    }
+
+    /**
+     * @throws \Throwable
+     */
+    public function revokePermission(Request $request, Role $role, Permission $permission): JsonResponse
+    {
+        $this->ensureRoleCanManagePermissions($role);
+        $this->ensurePermissionCanBeAssigned($permission);
+
+        $admin = $request->user('admin');
+        $actorIsDeveloper = $admin->isDeveloper();
+        $actorIsSuperAdmin = $admin->isSuperAdmin();
+        $actorPermissionIds = [];
+
+        if (! $actorIsDeveloper && ! $actorIsSuperAdmin) {
+            $actorPermissionIds = $admin->roles()
+                ->with('permissions:id')
+                ->get()
+                ->flatMap(fn (Role $actorRole) => $actorRole->permissions->pluck('id'))
+                ->map(fn ($id): int => (int) $id)
+                ->unique()
+                ->values()
+                ->all();
+        }
+
+        $canRevokePermission = $actorIsDeveloper
+            || (
+                ! $permission->developer_only
+                && (
+                    $actorIsSuperAdmin
+                    || in_array((int) $permission->id, $actorPermissionIds, true)
+                )
+            );
+
+        if (! $canRevokePermission) {
+            abort(403, '无权撤销此权限。');
+        }
+
+        $permissionIds = [(int) $permission->id];
+
+        if (in_array((int) $permission->type, [1, 2], true)) {
+            $descendantQuery = Permission::query()
+                ->where(
+                    'id_path',
+                    'like',
+                    $permission->id_path.$permission->id.',%',
+                )
+                ->whereIn('type', [1, 2])
+                ->where('authorization_required', true);
+
+            if (! $actorIsDeveloper) {
+                $descendantQuery->where('developer_only', false);
+            }
+
+            if (! $actorIsDeveloper && ! $actorIsSuperAdmin) {
+                $descendantQuery->whereIn('id', $actorPermissionIds);
+            }
+
+            $descendantIds = $descendantQuery
+                ->pluck('id')
+                ->map(fn ($id): int => (int) $id)
+                ->all();
+
+            $permissionIds = array_values(array_unique([
+                ...$permissionIds,
+                ...$descendantIds,
+            ]));
+        }
+
+        DB::transaction(function () use ($role, $permissionIds): void {
+            $role->permissions()->detach($permissionIds);
+        });
+
+        return response()->json([
+            'data' => [
+                'role_id' => $role->id,
+                'permission_id' => $permission->id,
+                'assigned' => false,
+                'revoked_permission_ids' => $permissionIds,
+            ],
+        ]);
+    }
+
+    private function ensureRoleCanManagePermissions(Role $role): void
+    {
+        if (in_array($role->code, [
+            Role::DEVELOPER_CODE,
+            Role::SUPER_ADMIN_CODE,
+        ], true)) {
+            abort(403, '开发者和超管角色的权限不能通过角色管理修改。');
+        }
+    }
+
+    private function ensurePermissionCanBeAssigned(Permission $permission): void
+    {
+        if (! $permission->authorization_required) {
+            throw ValidationException::withMessages([
+                'permission' => '该权限不需要角色授权，不能修改角色关联。',
+            ]);
+        }
     }
 }

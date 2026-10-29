@@ -1,6 +1,6 @@
 <script setup>
-import { onMounted, ref } from 'vue';
-import { apiRequest } from '../../api';
+import { onMounted, onUnmounted, ref } from 'vue';
+import {apiRequest} from '../../api';
 
 const props = defineProps({
     admin: {
@@ -35,17 +35,162 @@ const resetPasswordForm = ref({
     password_confirmation: '',
 });
 
-async function loadAdmins() {
+const roleOptions = ref({
+    roles: [],
+    assignable_role_ids: [],
+    removable_role_ids: [],
+    has_exclusive_role: false,
+});
+const roleOptionsLoading = ref(false);
+const roleUpdatingKey = ref(null);
+
+const searchText = ref('');
+const currentPage = ref(1);
+const perPage = ref(10);
+const total = ref(0);
+let searchTimer = null;
+
+function handleSearchInput() {
+    window.clearTimeout(searchTimer);
+    searchTimer = window.setTimeout(() => {
+        loadAdmins(1);
+    }, 300);
+}
+
+function changePageSize(size) {
+    perPage.value = size;
+    loadAdmins(1);
+}
+
+onUnmounted(() => {
+    window.clearTimeout(searchTimer);
+});
+
+async function loadAdmins(page = currentPage.value) {
     adminsLoading.value = true;
     adminErrorMessage.value = '';
+    currentPage.value = page;
 
     try {
-        const response = await apiRequest('/api/admin/admins');
+        const params = new URLSearchParams({
+            page: String(page),
+            per_page: String(perPage.value),
+            search: searchText.value.trim(),
+        });
+        const response = await apiRequest(`/api/admin/admins?${params}`);
+
         admins.value = response.data;
+        currentPage.value = response.current_page;
+        total.value = response.total;
     } catch (error) {
         adminErrorMessage.value = error.message;
     } finally {
         adminsLoading.value = false;
+    }
+}
+
+
+async function startEditingRoles(item) {
+    adminErrorMessage.value = '';
+    roleOptionsLoading.value = true;
+
+    try {
+        const response = await apiRequest(
+            `/api/admin/admins/${item.id}/role-options`,
+        );
+
+        selectedAdmin.value = item;
+        activeAdminPanel.value = 'roles';
+        roleOptions.value = response.data;
+    } catch (error) {
+        adminErrorMessage.value = error.message;
+    } finally {
+        roleOptionsLoading.value = false;
+    }
+}
+
+function canEditRoles(item) {
+    const actorRoleCodes = props.admin.role_codes ?? [];
+    const targetRoleCodes = (item.roles ?? []).map((role) => role.code);
+
+    if (
+        item.id === props.admin.id
+        || targetRoleCodes.includes('developer')
+    ) {
+        return false;
+    }
+
+    if (actorRoleCodes.includes('developer')) {
+        return true;
+    }
+
+    if (targetRoleCodes.includes('super_admin')) {
+        return false;
+    }
+
+    return Boolean(props.admin.can_view_admin_role_options);
+}
+
+function isRoleAssigned(admin, role) {
+    return (admin.roles ?? []).some(
+        (assignedRole) => assignedRole.id === role.id,
+    );
+}
+
+function isRoleToggleDisabled(admin, role) {
+    if (isRoleAssigned(admin, role)) {
+        return !roleOptions.value.removable_role_ids.includes(role.id);
+    }
+
+    const actorIsDeveloper = (props.admin.role_codes ?? [])
+        .includes('developer');
+    const targetHasSuperAdmin = (admin.roles ?? [])
+        .some((assignedRole) => assignedRole.code === 'super_admin');
+    const isPromotionToDeveloper = actorIsDeveloper
+        && targetHasSuperAdmin
+        && role.code === 'developer';
+
+    return !roleOptions.value.assignable_role_ids.includes(role.id)
+        || (roleOptions.value.has_exclusive_role && !isPromotionToDeveloper);
+}
+
+async function toggleAdminRole(admin, role, checked) {
+    roleUpdatingKey.value = `${admin.id}:${role.id}`;
+    adminErrorMessage.value = '';
+
+    try {
+        const response = await apiRequest(
+            `/api/admin/admins/${admin.id}/roles/${role.id}`,
+            { method: checked ? 'PUT' : 'DELETE' },
+        );
+
+        const updatedAdmin = response.data;
+
+        admins.value = admins.value.map((item) =>
+            item.id === updatedAdmin.id ? updatedAdmin : item,
+        );
+
+        if (!canEditRoles(updatedAdmin)) {
+            selectedAdmin.value = null;
+            activeAdminPanel.value = null;
+        } else {
+            selectedAdmin.value = updatedAdmin;
+            roleOptionsLoading.value = true;
+
+            try {
+                const optionsResponse = await apiRequest(
+                    `/api/admin/admins/${updatedAdmin.id}/role-options`,
+                );
+
+                roleOptions.value = optionsResponse.data;
+            } finally {
+                roleOptionsLoading.value = false;
+            }
+        }
+    } catch (error) {
+        adminErrorMessage.value = error.message;
+    } finally {
+        roleUpdatingKey.value = null;
     }
 }
 
@@ -82,6 +227,12 @@ function startEditing(item) {
     editForm.value = { name: item.name, email: item.email };
     adminErrorMessage.value = '';
 }
+
+function editOwnProfile() {
+    startEditing(props.admin);
+}
+
+defineExpose({ editOwnProfile });
 
 function startResettingPassword(item) {
     selectedAdmin.value = item;
@@ -161,6 +312,41 @@ async function resetAdminPassword() {
     }
 }
 
+function roleCodes(admin) {
+    return admin.role_codes
+        ?? admin.roles?.map((role) => role.code)
+        ?? [];
+}
+
+function privilegeLevel(admin) {
+    const codes = roleCodes(admin);
+
+    if (codes.includes('developer')) {
+        return 2;
+    }
+
+    return codes.includes('super_admin') ? 1 : 0;
+}
+
+function isProtectedTarget(item) {
+    return Boolean(item.can_reset_admin_passwords)
+        && privilegeLevel(item) >= privilegeLevel(props.admin);
+}
+
+function canEditAdmin(item) {
+    return Boolean(props.admin.can_update_admins)
+        && (
+            item.id === props.admin.id
+            || !isProtectedTarget(item)
+        );
+}
+
+function canResetAdminPassword(item) {
+    return Boolean(props.admin.can_reset_admin_passwords)
+        && item.id !== props.admin.id
+        && !isProtectedTarget(item);
+}
+
 function toggleCreateAdminForm() {
     showCreateAdminForm.value = !showCreateAdminForm.value;
     adminErrorMessage.value = '';
@@ -168,10 +354,6 @@ function toggleCreateAdminForm() {
 
 async function toggleAdminStatus(item) {
     const nextStatus = !item.status;
-
-    if (!nextStatus && !window.confirm(`确定停用管理员“${item.name}”吗？`)) {
-        return;
-    }
 
     statusUpdatingId.value = item.id;
     adminErrorMessage.value = '';
@@ -200,26 +382,31 @@ onMounted(loadAdmins);
 </script>
 
 <template>
-    <section class="mx-auto mt-6 max-w-6xl rounded-xl bg-white p-6 shadow">
+    <section class="mt-6 w-full rounded-xl bg-white p-6 shadow">
         <p v-if="adminErrorMessage" class="mb-4 text-sm text-red-600">
             {{ adminErrorMessage }}
         </p>
 
-        <div class="mb-4">
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
             <button
                 type="button"
                 class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
-                @click="toggleCreateAdminForm"
-            >
+                @click="toggleCreateAdminForm" >
                 {{ showCreateAdminForm ? '收起' : '新管理员' }}
             </button>
+
+            <el-input
+                v-model="searchText"
+                clearable
+                class="w-full sm:max-w-sm"
+                placeholder="搜索姓名、邮箱、角色或 ID"
+                @input="handleSearchInput"
+            />
         </div>
 
         <form
             v-if="showCreateAdminForm"
-            class="mb-6 grid gap-4 rounded-lg border border-slate-200 p-4 sm:grid-cols-2 lg:grid-cols-4"
-            @submit.prevent="createAdmin"
-        >
+            class="mb-6 grid gap-4 rounded-lg border border-slate-200 p-4 sm:grid-cols-2 lg:grid-cols-4" >
             <label>
                 <span class="text-sm font-medium">姓名</span>
                 <input
@@ -257,8 +444,7 @@ onMounted(loadAdmins);
                 <button
                     type="submit"
                     :disabled="creatingAdmin"
-                    class="w-full rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50"
-                >
+                    class="w-full rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50" >
                     {{ creatingAdmin ? '创建中…' : '新增管理员' }}
                 </button>
                 <button
@@ -274,8 +460,7 @@ onMounted(loadAdmins);
         <form
             v-if="selectedAdmin && activeAdminPanel === 'edit'"
             class="mb-6 grid gap-4 rounded-lg border border-blue-200 bg-blue-50 p-4 sm:grid-cols-2 lg:grid-cols-3"
-            @submit.prevent="updateAdmin"
-        >
+            @submit.prevent="updateAdmin" >
             <h2 class="sm:col-span-2 lg:col-span-3 font-semibold">
                 编辑管理员：{{ selectedAdmin.email }}
             </h2>
@@ -306,16 +491,14 @@ onMounted(loadAdmins);
                 <button
                     type="submit"
                     :disabled="updatingAdmin"
-                    class="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50"
-                >
+                    class="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50" >
                     {{ updatingAdmin ? '保存中…' : '保存修改' }}
                 </button>
 
                 <button
-                    type="button"
-                    class="rounded border border-slate-300 px-4 py-2"
                     @click="cancelEditing"
-                >
+                    type="button"
+                    class="rounded border border-slate-300 px-4 py-2" >
                     取消
                 </button>
             </div>
@@ -324,8 +507,7 @@ onMounted(loadAdmins);
         <form
             v-if="selectedAdmin && activeAdminPanel === 'password'"
             class="mb-6 grid gap-4 rounded-lg border border-amber-200 bg-amber-50 p-4 sm:grid-cols-2 lg:grid-cols-3"
-            @submit.prevent="resetAdminPassword"
-        >
+            @submit.prevent="resetAdminPassword">
             <h2 class="font-semibold sm:col-span-2 lg:col-span-3">
                 重置密码：{{ selectedAdmin.email }}
             </h2>
@@ -338,8 +520,7 @@ onMounted(loadAdmins);
                     minlength="8"
                     autocomplete="new-password"
                     required
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-                >
+                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2" >
             </label>
 
             <label>
@@ -350,16 +531,14 @@ onMounted(loadAdmins);
                     minlength="8"
                     autocomplete="new-password"
                     required
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-                >
+                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2" >
             </label>
 
             <div class="flex items-end gap-2">
                 <button
                     type="submit"
                     :disabled="resettingPassword"
-                    class="rounded bg-amber-600 px-4 py-2 text-white disabled:opacity-50"
-                >
+                    class="rounded bg-amber-600 px-4 py-2 text-white disabled:opacity-50" >
                     {{ resettingPassword ? '重置中…' : '确认重置密码' }}
                 </button>
 
@@ -367,11 +546,50 @@ onMounted(loadAdmins);
                     type="button"
                     :disabled="resettingPassword"
                     class="rounded border border-slate-300 bg-white px-4 py-2 text-slate-700 disabled:opacity-50"
-                    @click="cancelResettingPassword"
-                >
+                    @click="cancelResettingPassword" >
                     取消
                 </button>
             </div>
+        </form>
+
+        <form
+            v-if="selectedAdmin && activeAdminPanel === 'roles'"
+            class="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4">
+            <h2 class="mb-3 font-semibold">
+                修改角色：{{ selectedAdmin.email }}
+            </h2>
+
+            <div class="flex flex-wrap gap-4">
+                <label
+                    v-for="role in roleOptions.roles"
+                    :key="role.id"
+                    class="flex items-center gap-2">
+                    <input
+                        type="checkbox"
+                        :checked="isRoleAssigned(selectedAdmin, role)"
+                        :disabled="
+                            roleOptionsLoading
+                            || roleUpdatingKey === `${selectedAdmin.id}:${role.id}`
+                            || isRoleToggleDisabled(selectedAdmin, role)
+                        "
+                                            @change="
+                            toggleAdminRole(
+                                selectedAdmin,
+                                role,
+                                $event.target.checked,
+                            )
+                        "
+                    >
+                    <span>{{ role.name }}</span>
+                </label>
+            </div>
+
+            <button
+                type="button"
+                class="mt-4 rounded border border-slate-300 px-3 py-1"
+                @click="cancelEditing">
+                收起
+            </button>
         </form>
 
         <p v-if="adminsLoading" class="text-slate-600">
@@ -382,12 +600,15 @@ onMounted(loadAdmins);
             暂无管理员数据。
         </p>
 
+
+
         <div v-else class="overflow-x-auto">
             <table class="w-full min-w-[600px] text-left text-sm">
                 <thead class="border-b text-slate-500">
                 <tr>
                     <th class="px-3 py-3">ID</th>
                     <th class="px-3 py-3">姓名</th>
+                    <th class="px-3 py-3">角色</th>
                     <th class="px-3 py-3">邮箱</th>
                     <th class="px-3 py-3">状态</th>
                     <th class="px-3 py-3">创建时间</th>
@@ -398,10 +619,15 @@ onMounted(loadAdmins);
                 <tr
                     v-for="item in admins"
                     :key="item.id"
-                    class="border-b last:border-0"
-                >
+                    class="border-b last:border-0" >
                     <td class="px-3 py-3">{{ item.id }}</td>
                     <td class="px-3 py-3">{{ item.name }}</td>
+                    <td class="px-3 py-3">
+                        <span v-if="item.roles.length">
+                            {{ item.roles.map((role) => role.name).join('、') }}
+                        </span>
+                        <span v-else>—</span>
+                    </td>
                     <td class="px-3 py-3">{{ item.email }}</td>
                     <td class="px-3 py-3">
                         <div class="flex items-center gap-2">
@@ -410,42 +636,62 @@ onMounted(loadAdmins);
                                 role="switch"
                                 :aria-checked="item.status"
                                 :aria-label="`${item.name}：${item.status ? '启用' : '停用'}`"
-                                :disabled=" statusUpdatingId === item.id || (item.id === props.admin.id && item.status) "  class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-60"
+                                :disabled="statusUpdatingId === item.id || (item.status && !item.can_disable)"
+                                class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-60"
                                 :class="item.status ? 'bg-emerald-500' : 'bg-slate-300'"
-                                @click="toggleAdminStatus(item)"
-                            >
-                                        <span
-                                            class="inline-block size-5 transform rounded-full bg-white shadow transition-transform duration-200"
-                                            :class="item.status ? 'translate-x-5' : 'translate-x-0.5'"
-                                        ></span>
+                                @click="toggleAdminStatus(item)">
+                                <span
+                                    class="inline-block size-5 transform rounded-full bg-white shadow transition-transform duration-200"
+                                    :class="item.status ? 'translate-x-5' : 'translate-x-0.5'"
+                                ></span>
                             </button>
 
                             <span   class="text-sm font-medium"  :class="item.status ? 'text-emerald-700' : 'text-slate-500'">
-                                            {{ statusUpdatingId === item.id ? '处理中…'   : item.status   ? '启用'   : '停用' }}
-                                        </span>
+                                {{ statusUpdatingId === item.id ? '处理中…'   : item.status   ? '启用'   : '停用' }}
+                            </span>
                         </div>
                     </td>
                     <td class="px-3 py-3">{{ item.created_at }}</td>
 
                     <td class="px-3 py-3">
                         <button
+                            v-if="canEditAdmin(item)"
                             class="rounded border border-slate-300 px-3 py-1"
-                            @click="startEditing(item)"
-                        >
+                            @click="startEditing(item)">
                             编辑
                         </button>
 
                         <button
+                            v-if="canResetAdminPassword(item)"
                             type="button"
                             class="ml-2 rounded border border-amber-300 px-3 py-1 text-amber-700 hover:bg-amber-50"
-                            @click="startResettingPassword(item)"
-                        >
+                            @click="startResettingPassword(item)">
                             重置密码
+                        </button>
+
+                        <button
+                            v-if="canEditRoles(item)"
+                            type="button"
+                            class="ml-2 rounded border border-blue-300 px-3 py-1 text-blue-700 hover:bg-blue-50"
+                            @click="startEditingRoles(item)">
+                            修改角色
                         </button>
                     </td>
                 </tr>
                 </tbody>
             </table>
+
+            <el-pagination
+                v-if="total > 0"
+                class="mt-4 justify-end"
+                :current-page="currentPage"
+                :page-size="perPage"
+                :page-sizes="[10, 20, 50]"
+                :total="total"
+                layout="total, sizes, prev, pager, next, jumper"
+                @current-change="loadAdmins"
+                @size-change="changePageSize"
+            />
         </div>
     </section>
 </template>

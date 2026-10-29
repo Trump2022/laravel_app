@@ -1,11 +1,23 @@
 <script setup>
 import { apiRequest } from './api';
-import { onMounted, onUnmounted, ref } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
+import { RouterView, useRoute, useRouter } from 'vue-router';
+import { pageRouteNames } from './router';
 import AdminLayout from './components/admin/AdminLayout.vue';
-import AdminManagement from './components/admin/AdminManagement.vue';
 import OwnPasswordForm from './components/admin/OwnPasswordForm.vue';
-import RoleManagement from './components/admin/RoleManagement.vue';
-import PermissionManagement from './components/admin/PermissionManagement.vue';
+
+const adminManagementRef = ref(null);
+
+async function editOwnProfile() {
+    showOwnPasswordForm.value = false;
+
+    if (route.name !== pageRouteNames.admins) {
+        await router.push({ name: pageRouteNames.admins });
+    }
+
+    await nextTick();
+    await adminManagementRef.value?.editOwnProfile();
+}
 
 const email = ref('');
 const password = ref('');
@@ -15,7 +27,21 @@ const loading = ref(false);
 const successMessage = ref('');
 const showOwnPasswordForm = ref(false);
 let successMessageTimer = null;
-const activePage = ref('admins');
+
+const route = useRoute();
+const router = useRouter();
+
+const routableMenuPaths = new Set(
+    Object.values(pageRouteNames).map(
+        (routeName) => router.resolve({ name: routeName }).path,
+    ),
+);
+
+function selectPage(path) {
+    if (routableMenuPaths.has(path)) {
+        router.push(path);
+    }
+}
 
 function showSuccessMessage(message) {
     successMessage.value = message;
@@ -106,9 +132,10 @@ async function logout() {
             <template v-if="admin">
                 <AdminLayout
                     :admin="admin"
-                    :active-page="activePage"
-                    @select-page="activePage = $event"
+                    :active-path="route.path"
+                    @select-page="selectPage"
                     @change-password="showOwnPasswordForm = true"
+                    @edit-profile="editOwnProfile"
                     @logout="logout" >
 
                     <OwnPasswordForm
@@ -125,21 +152,14 @@ async function logout() {
                         {{ successMessage }}
                     </p>
 
-                    <AdminManagement
-                        v-if="activePage === 'admins'"
-                        :admin="admin"
-                        @success="showSuccessMessage"
-                    />
-
-                    <RoleManagement
-                        v-else-if="activePage === 'roles'"
-                        @success="showSuccessMessage"
-                    />
-
-                    <PermissionManagement
-                        v-else-if="activePage === 'permissions'"
-                        @success="showSuccessMessage"
-                    />
+                    <RouterView v-slot="{ Component }">
+                        <component
+                            :is="Component"
+                            ref="adminManagementRef"
+                            v-bind="route.meta.withAdmin ? { admin } : {}"
+                            @success="showSuccessMessage"
+                        />
+                    </RouterView>
                 </AdminLayout>
             </template>
 
