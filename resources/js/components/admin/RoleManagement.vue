@@ -705,6 +705,7 @@ onMounted(loadRoles);
 
                             <template #reference>
                                 <el-button
+                                    class="ml-2"
                                     size="small"
                                     type="danger"
                                     :disabled="role.admins_exists || role.permissions_exists"

@@ -728,6 +728,7 @@ onMounted(() => {
                         >
                             <template #reference>
                                 <el-button
+                                    class="ml-2"
                                     size="small"
                                     type="danger"
                                     :loading="deletingAdminId === item.id"
