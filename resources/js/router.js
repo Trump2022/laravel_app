@@ -12,7 +12,7 @@ export const pageRouteNames = {
 };
 
 export default createRouter({
-    history: createWebHistory('/front/'),
+    history: createWebHistory('/manage/'),
     routes: [
         {
             path: '/',
