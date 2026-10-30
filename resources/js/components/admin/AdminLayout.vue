@@ -26,25 +26,42 @@ const availablePagePaths = Object.values(pageRouteNames).map(
     (routeName) => router.resolve({ name: routeName }).path,
 );
 
-function findPageTitle(nodes, path) {
+function findBreadcrumbItems(nodes, path, ancestors = []) {
     for (const node of nodes) {
-        if (Number(node.type) === 2 && node.path === path) {
-            return node.name;
+        const nodeType = Number(node.type);
+        const currentPath = [1, 2].includes(nodeType)
+            ? [...ancestors, node]
+            : ancestors;
+
+        if (nodeType === 2 && node.path === path) {
+            return currentPath;
         }
 
-        const childTitle = findPageTitle(node.children ?? [], path);
+        const matchedPath = findBreadcrumbItems(
+            node.children ?? [],
+            path,
+            currentPath,
+        );
 
-        if (childTitle) {
-            return childTitle;
+        if (matchedPath.length > 0) {
+            return matchedPath;
         }
     }
 
-    return '后台首页';
+    return [];
 }
 
-const activePageTitle = computed(() =>
-    findPageTitle(menuTree.value, props.activePath),
-);
+const breadcrumbItems = computed(() => {
+    const items = findBreadcrumbItems(menuTree.value, props.activePath);
+
+    if (items.length > 0) {
+        return items;
+    }
+
+    const routeTitle = router.resolve(props.activePath).meta.title;
+
+    return [{ id: 'fallback', name: routeTitle || '后台首页' }];
+});
 
 async function loadMenuTree() {
     menuTreeLoading.value = true;
@@ -142,7 +159,12 @@ function handleAccountCommand(command) {
 
                     <el-breadcrumb separator="/">
                         <el-breadcrumb-item>后台</el-breadcrumb-item>
-                        <el-breadcrumb-item>{{ activePageTitle }}</el-breadcrumb-item>
+                        <el-breadcrumb-item
+                            v-for="item in breadcrumbItems"
+                            :key="item.id"
+                        >
+                            {{ item.name }}
+                        </el-breadcrumb-item>
                     </el-breadcrumb>
                 </div>
 

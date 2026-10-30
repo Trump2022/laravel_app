@@ -16,6 +16,7 @@ class PermissionSeeder extends Seeder
                 'name' => '权限管理',
                 'type' => 1,
                 'pid' => null,
+                'icon' => 'Crop',
                 'sort' => 1,
             ],
             [
@@ -25,6 +26,7 @@ class PermissionSeeder extends Seeder
                 'pid' => 'permission',
                 'path' => '/admin/admins',
                 'component' => 'admin/AdminManagement',
+                'icon' => 'UserFilled',
                 'sort' => 2,
             ],
             [
@@ -34,6 +36,7 @@ class PermissionSeeder extends Seeder
                 'pid' => 'permission',
                 'path' => '/admin/roles',
                 'component' => 'admin/RoleManagement',
+                'icon' => 'Grape',
                 'sort' => 1,
             ],
             [
@@ -43,6 +46,7 @@ class PermissionSeeder extends Seeder
                 'pid' => 'permission',
                 'path' => '/admin/permissions',
                 'component' => 'admin/PermissionManagement',
+                'icon' => 'Menu',
                 'developer_only' => 1,
                 'sort' => 0,
             ],
@@ -55,6 +59,7 @@ class PermissionSeeder extends Seeder
                 'pid' => null,
                 'path' => '/admin/dashboard',
                 'component' => 'dashboard',
+                'icon' => 'HomeFilled',
                 'sort' => 0,
             ],
 
@@ -64,6 +69,7 @@ class PermissionSeeder extends Seeder
                 'name' => '通用设置',
                 'type' => 1,
                 'pid' => null,
+                'icon' => 'Setting',
                 'sort' => 2,
             ],
 

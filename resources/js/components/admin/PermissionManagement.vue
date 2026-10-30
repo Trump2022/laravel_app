@@ -1,6 +1,10 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { apiRequest } from '../../api';
+// import { menuIconComponents, menuIconOptions } from './menuIcons';
+
+import MenuIconPicker from './MenuIconPicker.vue';
+import { menuIconComponents } from './menuIcons';
 
 const rows = ref([]);
 const expandedPermissionIds = ref([]);
@@ -501,7 +505,7 @@ onMounted(loadPermissionTree);
             </el-form-item>
 
             <el-form-item label="图标">
-                <el-input v-model="newPermission.icon" maxlength="255" />
+                <MenuIconPicker v-model="newPermission.icon" />
             </el-form-item>
 
             <el-form-item v-if="newPermission.type === 2" label="前端路由 path" required>
@@ -592,23 +596,7 @@ onMounted(loadPermissionTree);
             </el-form-item>
 
             <el-form-item label="图标">
-                <el-input v-model="editPermission.icon" maxlength="255" />
-            </el-form-item>
-
-            <el-form-item v-if="editPermission.type === 2" label="前端路由 path" required>
-                <el-input v-model="editPermission.path" maxlength="255" />
-            </el-form-item>
-
-            <el-form-item v-if="editPermission.type === 2" label="前端组件 component" required>
-                <el-input v-model="editPermission.component" maxlength="150" />
-            </el-form-item>
-
-            <el-form-item v-if="editPermission.type === 3" label="权限标识 permission_code" required>
-                <el-input
-                    v-model="editPermission.permission_code"
-                    maxlength="191"
-                    placeholder="例如 admin.roles.index:get"
-                />
+                <MenuIconPicker v-model="editPermission.icon" />
             </el-form-item>
 
             <el-form-item label="状态">
@@ -700,7 +688,12 @@ onMounted(loadPermissionTree);
                             </button>
                             <span v-else class="mr-1 inline-block w-6"></span>
 
-                            {{ permission.name }}
+                            <el-icon
+                                v-if="menuIconComponents[permission.icon]"
+                                class="mr-2" >
+                                <component :is="menuIconComponents[permission.icon]" />
+                            </el-icon>
+                            <span>{{ permission.name }}</span>
                         </div>
                     </td>
 
