@@ -9,7 +9,8 @@ const props = defineProps({
     },
 });
 
-const emit = defineEmits(['success']);
+const isEditingOwnProfile = ref(false);
+const emit = defineEmits(['success', 'profile-updated']);
 
 const adminErrorMessage = ref('');
 const admins = ref([]);
@@ -225,11 +226,13 @@ function startEditing(item) {
     selectedAdmin.value = item;
     activeAdminPanel.value = 'edit';
     editForm.value = { name: item.name, email: item.email };
+    isEditingOwnProfile.value = false;
     adminErrorMessage.value = '';
 }
 
 function editOwnProfile() {
     startEditing(props.admin);
+    isEditingOwnProfile.value = true;
 }
 
 defineExpose({ editOwnProfile });
@@ -247,6 +250,7 @@ function startResettingPassword(item) {
 function cancelEditing() {
     selectedAdmin.value = null;
     activeAdminPanel.value = null;
+    isEditingOwnProfile.value = false;
 }
 
 function cancelResettingPassword() {
@@ -263,20 +267,28 @@ async function updateAdmin() {
     updatingAdmin.value = true;
     adminErrorMessage.value = '';
 
-    try {
-        const response = await apiRequest(
-            `/api/admin/admins/${selectedAdmin.value.id}`,
-            {
-                method: 'PATCH',
-                body: JSON.stringify(editForm.value),
-            },
-        );
+    const isOwnProfile = isEditingOwnProfile.value;
+    const endpoint = isOwnProfile
+        ? '/api/admin/me/profile'
+        : `/api/admin/admins/${selectedAdmin.value.id}`;
 
-        admins.value = admins.value.map((item) =>
-            item.id === response.data.id ? response.data : item,
-        );
+    try {
+        const response = await apiRequest(endpoint, {
+            method: 'PATCH',
+            body: JSON.stringify(editForm.value),
+        });
+
+        if (isOwnProfile) {
+            emit('profile-updated', response.data);
+        } else {
+            admins.value = admins.value.map((item) =>
+                item.id === response.data.id ? response.data : item,
+            );
+        }
+
         selectedAdmin.value = null;
         activeAdminPanel.value = null;
+        isEditingOwnProfile.value = false;
         emit('success', '管理员资料已更新。');
     } catch (error) {
         adminErrorMessage.value = error.message;
@@ -378,7 +390,11 @@ async function toggleAdminStatus(item) {
     }
 }
 
-onMounted(loadAdmins);
+onMounted(() => {
+    if (props.admin.can_view_admins) {
+        loadAdmins();
+    }
+});
 </script>
 
 <template>
@@ -389,10 +405,11 @@ onMounted(loadAdmins);
 
         <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
             <button
+                v-if="props.admin.can_create_admins"
                 type="button"
                 class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
                 @click="toggleCreateAdminForm" >
-                {{ showCreateAdminForm ? '收起' : '新管理员' }}
+                {{ showCreateAdminForm ? '收起' : '新增管理员' }}
             </button>
 
             <el-input
@@ -406,7 +423,8 @@ onMounted(loadAdmins);
 
         <form
             v-if="showCreateAdminForm"
-            class="mb-6 grid gap-4 rounded-lg border border-slate-200 p-4 sm:grid-cols-2 lg:grid-cols-4" >
+            class="mb-6 grid gap-4 rounded-lg border border-slate-200 p-4 sm:grid-cols-2 lg:grid-cols-4"
+            @submit.prevent="createAdmin" >
             <label>
                 <span class="text-sm font-medium">姓名</span>
                 <input

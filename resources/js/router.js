@@ -44,7 +44,11 @@ export default createRouter({
             path: '/admin/permissions',
             name: pageRouteNames.permissions,
             component: PermissionManagement,
-            meta: { page: 'permissions', title: '菜单管理' },
+            meta: {
+                page: 'permissions',
+                title: '菜单管理' ,
+                withAdmin: true,
+            },
         },
         {
             path: '/:pathMatch(.*)*',

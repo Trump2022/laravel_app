@@ -31,6 +31,10 @@ let successMessageTimer = null;
 const route = useRoute();
 const router = useRouter();
 
+function updateAdminProfile(updatedAdmin) {
+    admin.value = updatedAdmin;
+}
+
 const routableMenuPaths = new Set(
     Object.values(pageRouteNames).map(
         (routeName) => router.resolve({ name: routeName }).path,
@@ -155,6 +159,7 @@ async function logout() {
                     <RouterView v-slot="{ Component }">
                         <component
                             :is="Component"
+                            @profile-updated="updateAdminProfile"
                             ref="adminManagementRef"
                             v-bind="route.meta.withAdmin ? { admin } : {}"
                             @success="showSuccessMessage"

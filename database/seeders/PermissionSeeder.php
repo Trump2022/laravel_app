@@ -43,6 +43,7 @@ class PermissionSeeder extends Seeder
                 'pid' => 'permission',
                 'path' => '/admin/permissions',
                 'component' => 'admin/PermissionManagement',
+                'developer_only' => 1,
                 'sort' => 0,
             ],
 
@@ -116,6 +117,7 @@ class PermissionSeeder extends Seeder
                 'type' => 3,
                 'pid' => 'permissions',
                 'permission_code' => 'admin.permissions.move:patch',
+                'developer_only' => 1,
                 'sort' => 5,
             ],
 

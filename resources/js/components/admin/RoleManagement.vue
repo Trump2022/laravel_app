@@ -266,7 +266,8 @@ async function toggleRolePermission(permission, checked) {
             if (changedIdSet.has(row.id)) {
                 row.assigned = checked;
                 row.locked = !row.authorization_required
-                    || (!checked && Number(row.status) !== 1);
+                    || (row.developer_only && !row.assigned)
+                    || (!row.assigned && Number(row.status) !== 1);
             }
         }
     } catch (error) {
@@ -411,6 +412,7 @@ onMounted(loadRoles);
 
         <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
             <button
+                v-if="props.admin.can_create_roles"
                 type="button"
                 class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
                 @click=" showCreateForm = !showCreateForm; errorMessage = '';  " >{{ showCreateForm ? '收起' : '新建角色' }}
@@ -503,7 +505,7 @@ onMounted(loadRoles);
                     v-model="editForm.code"
                     type="text"
                     maxlength="255"
-                    :readonly="['developer', 'super_admin'].includes(selectedRole.code)"
+                    :readonly="['developer', 'super_admin'].includes(selectedRole.code) || !(props.admin.role_codes ?? []).includes('developer')"
                     class="mt-1 w-full rounded border border-slate-300 px-3 py-2 read-only:bg-slate-100"
                 >
             </label>
@@ -645,6 +647,7 @@ onMounted(loadRoles);
                     <td class="px-3 py-3">{{ role.remark || '—' }}</td>
                     <td class="px-3 py-3">
                         <button
+                            v-if="props.admin.can_update_roles"
                             type="button"
                             class="rounded border border-slate-300 px-3 py-1 hover:bg-slate-50"
                             @click="startEditing(role)" >

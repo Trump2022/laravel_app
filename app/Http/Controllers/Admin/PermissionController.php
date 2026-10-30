@@ -635,7 +635,8 @@ class PermissionController extends Controller
                 'locked',
                 ! $permission->authorization_required// 无需授权的权限始终锁定；已停用权限仅在尚未分配时锁定，
                 || ! $canManagePermission   //无权分配的也锁定
-                || (! $assigned && (int) $permission->status !== 1),// 已分配的停用权限仍可取消勾选。
+                || (! $assigned && $permission->developer_only) // 未分配仅开发者可见的要锁定
+                || (! $assigned && (int) $permission->status !== 1),// 未分配已停用的要锁定 已分配的停用权限仍可取消勾选。
             );
 
             $items[$id] = $permission->toArray();

@@ -35,14 +35,20 @@ class RoleController extends Controller
         $actorIsDeveloper = $actor->roles->contains('code', Role::DEVELOPER_CODE);
         $actorIsSuperAdmin = $actor->roles->contains('code', Role::SUPER_ADMIN_CODE);
 
-        if (! $actorIsDeveloper) {
+        if (!$actorIsDeveloper) {
             if ($actorIsSuperAdmin) {
                 $query->where(function ($query): void {
                     $query->whereNull('code')
                         ->orWhere('code', '!=', Role::DEVELOPER_CODE);
                 });
             } else {
-                $query->whereIn('id', $actor->roles->modelKeys());
+                $query->where(function ($query): void {
+                    $query->whereNull('code')
+                        ->orWhereNotIn('code', [
+                            Role::DEVELOPER_CODE,
+                            Role::SUPER_ADMIN_CODE,
+                        ]);
+                });
             }
         }
 
@@ -169,6 +175,10 @@ class RoleController extends Controller
         $this->ensureRoleCanManagePermissions($role);
         $this->ensurePermissionCanBeAssigned($permission);
 
+        if ($permission->developer_only) {
+            abort(403, '开发者专属权限不能分配给其他角色。');
+        }
+
         if ((int) $permission->status !== 1) {
             throw ValidationException::withMessages([
                 'permission' => '已停用的权限不能分配给角色。',
@@ -202,7 +212,6 @@ class RoleController extends Controller
             }
 
             // 操作者身份和可分配权限已在上方计算；这里只用它们筛选自动补齐的上级权限。
-
             foreach ($ancestorIds as $ancestorId) {
                 $ancestor = $ancestors->get($ancestorId);
 
@@ -210,7 +219,7 @@ class RoleController extends Controller
                     ! in_array((int) $ancestor->type, [1, 2], true)
                     || ! $ancestor->authorization_required
                     || (int) $ancestor->status !== 1
-                    || (! $actorIsDeveloper && $ancestor->developer_only)
+                    || $ancestor->developer_only
                     || (
                         ! $actorIsDeveloper
                         && ! $actorIsSuperAdmin
@@ -291,6 +300,23 @@ class RoleController extends Controller
             ]));
         }
 
+        //移除角色的权限时,不能使目标角色失去角色分配权限
+        $assignPermissionId = Permission::query()
+            ->where('permission_code', 'admin.roles.permissions.assign:put')
+            ->where('type', 3)
+            ->value('id');
+        if (
+            ! $actorIsDeveloper
+            && ! $actorIsSuperAdmin
+            && $assignPermissionId !== null
+            && in_array((int) $assignPermissionId, $permissionIds, true)
+            && $role->permissions()
+                ->where('permissions.id', $assignPermissionId)
+                ->exists()
+        ) {
+            abort(403, '不能移除目标角色的角色权限分配权限。');
+        }
+
         DB::transaction(function () use ($role, $permissionIds): void {
             $role->permissions()->detach($permissionIds);
         });
@@ -367,10 +393,10 @@ class RoleController extends Controller
             );
 
         return [
-            $canManagePermission,
+            $canManagePermission,//是否可管理这条权限
             $actorIsDeveloper,
             $actorIsSuperAdmin,
-            $actorPermissionIds,
+            $actorPermissionIds,//可管理的角色id集合
         ];
     }
 }

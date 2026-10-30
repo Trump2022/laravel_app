@@ -29,11 +29,11 @@ class AdminSeeder extends Seeder
             ],
             [
                 'name' => 'manager',
-                'email' => 'manage@example.com',
+                'email' => 'manager@example.com',
                 'password' => '12345678',
                 'roles' => [
-                    ['field' => 'name', 'value' => '市场总监'],
                     ['field' => 'name', 'value' => '总经理'],
+                    ['field' => 'name', 'value' => '财务'],
                 ],
             ],
         ];

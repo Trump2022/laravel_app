@@ -6,6 +6,13 @@ const rows = ref([]);
 const expandedPermissionIds = ref([]);
 const hasInitializedExpansion = ref(false);
 
+const props = defineProps({
+    admin: {
+        type: Object,
+        required: true,
+    },
+});
+
 const visibleRows = computed(() => {
     const rowsById = new Map(
         rows.value.map((row) => [row.id, row]),
@@ -452,6 +459,7 @@ onMounted(loadPermissionTree);
     <section class="mt-6 w-full rounded-xl bg-white p-6 shadow">
         <div class="mb-4">
             <el-button
+                v-if="props.admin.can_create_permissions"
                 type="primary"
                 @click="
                 showCreateForm = !showCreateForm;

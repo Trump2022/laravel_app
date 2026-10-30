@@ -158,7 +158,6 @@ function handleAccountCommand(command) {
                     <template #dropdown>
                         <el-dropdown-menu>
                             <el-dropdown-item
-                                v-if="props.admin.can_update_admins"
                                 command="edit-profile">
                                 编辑我的资料
                             </el-dropdown-item>

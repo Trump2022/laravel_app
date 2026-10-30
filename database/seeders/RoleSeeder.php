@@ -23,7 +23,7 @@ class RoleSeeder extends Seeder
             ],
             [
                 'code' => null,
-                'name' => '市场总监',
+                'name' => '总经理',
                 'remark' => '普通管理员',
             ],
             [
@@ -34,11 +34,6 @@ class RoleSeeder extends Seeder
             [
                 'code' => null,
                 'name' => '人事',
-                'remark' => '普通管理员',
-            ],
-            [
-                'code' => null,
-                'name' => '总经理',
                 'remark' => '普通管理员',
             ],
         ];

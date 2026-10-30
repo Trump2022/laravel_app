@@ -17,10 +17,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
     Route::post('login', [AuthController::class, 'login'])->name('login'); // 管理员登录
 
     Route::middleware(['auth:admin', EnsureAdminIsActive::class])->group(function () {
+        Route::patch('me/password', [AuthController::class, 'updateOwnPassword'])->name('me.password'); // 修改当前管理员密码
+        Route::patch('me/profile', [AuthController::class, 'updateOwnProfile'])->name('me.profile'); //编辑我的资料
         Route::post('logout', [AuthController::class, 'logout'])->name('logout'); // 管理员退出登录
 
         Route::get('me', [AuthController::class, 'me'])->name('me'); // 获取当前管理员信息及能力
         Route::get('menu/tree', [PermissionController::class, 'menuTree'])->name('menu.tree'); // 获取当前管理员可见的菜单树
+
 
         Route::middleware(CheckAdminPermission::class)->group(function () {
             Route::get('dashboard/index', function () {
@@ -52,7 +55,5 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::patch('permissions/{permission}/move', [PermissionController::class, 'move'])->name('permissions.move'); // 调整权限节点顺序
 
         });
-
-        Route::patch('me/password', [AuthController::class, 'updateOwnPassword'])->name('me.password'); // 修改当前管理员密码
     });
 });

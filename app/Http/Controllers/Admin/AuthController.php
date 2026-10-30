@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use App\Models\Permission;
 use App\Models\Role;
+use Illuminate\Validation\Rule;
 
 class AuthController extends Controller
 {
@@ -77,6 +78,34 @@ class AuthController extends Controller
      * @param Request $request
      * @return JsonResponse
      */
+    public function updateOwnProfile(Request $request): JsonResponse
+    {
+        $admin = $request->user('admin');
+
+        $validated = $request->validate([
+            'name' => ['sometimes', 'required', 'string', 'max:255'],
+            'email' => [
+                'sometimes',
+                'required',
+                'string',
+                'email',
+                'max:255',
+                Rule::unique('admins', 'email')->ignore($admin->getKey()),
+            ],
+        ]);
+
+        $admin->update($validated);
+        $admin->refresh();
+
+        return response()->json([
+            'data' => $this->adminData($admin),
+        ]);
+    }
+
+    /**
+     * @param Request $request
+     * @return JsonResponse
+     */
     public function updateOwnPassword(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -115,6 +144,11 @@ class AuthController extends Controller
             'admin.roles.permissions.revoke:delete',
             'admin.admins.update:patch',
             'admin.admins.password:patch',
+            'admin.admins.index:get',
+            'admin.roles.update:patch',
+            'admin.roles.store:post',
+            'admin.admins.store:post',
+            'admin.permissions.store:post',
         ];
 
         $permissions = Permission::query()
@@ -165,14 +199,15 @@ class AuthController extends Controller
             'name' => $admin->name,
             'email' => $admin->email,
             'role_codes' => $roleCodes,
-            'can_view_admin_role_options' => $hasApiPermission(
-                'admin.admins.role-options:get',
-            ),
-            'can_manage_role_permissions' => $hasApiPermission('admin.roles.permissions.index:get')
-                && $hasApiPermission('admin.roles.permissions.assign:put')
-                && $hasApiPermission('admin.roles.permissions.revoke:delete'),
+            'can_view_admin_role_options' => $hasApiPermission('admin.admins.role-options:get'),
+            'can_manage_role_permissions' => $hasApiPermission('admin.roles.permissions.index:get') && $hasApiPermission('admin.roles.permissions.assign:put')  && $hasApiPermission('admin.roles.permissions.revoke:delete'),
             'can_update_admins' => $hasApiPermission('admin.admins.update:patch'),
+            'can_view_admins' => $hasApiPermission('admin.admins.index:get'),
             'can_reset_admin_passwords' => $hasApiPermission('admin.admins.password:patch'),
+            'can_update_roles' => $hasApiPermission('admin.roles.update:patch'),
+            'can_create_roles' => $hasApiPermission('admin.roles.store:post'),
+            'can_create_admins' => $hasApiPermission('admin.admins.store:post'),
+            'can_create_permissions' => $hasApiPermission('admin.permissions.store:post'),
         ];
     }
 }
