@@ -7,7 +7,6 @@ use App\Models\Admin;
 use App\Models\Role;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-// use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use App\Models\Permission;
 use Illuminate\Support\Collection;
@@ -588,16 +587,16 @@ class AdminController extends Controller
     {
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            // 'email' => ['required', 'string', 'email', 'max:255', 'unique:admins,email'],
-            'email' => ['required', 'string', 'email', 'max:255'],
+            'email' => ['required', 'string', 'email', 'max:255', 'unique:admins,email'],
             'password' => ['required', 'string', 'min:8'],
+        ], [
+            'email.unique' => '该邮箱已被使用。',
         ]);
-
-        if (Admin::checkEmailExists($validated)) {
-            throw ValidationException::withMessages([
-                'email' => ['该邮箱已被使用。'],
-            ]);
-        }
+        // if (Admin::checkEmailExists($validated)) {
+        //     throw ValidationException::withMessages([
+        //         'email' => ['该邮箱已被使用。'],
+        //     ]);
+        // }
 
         $admin = Admin::create($validated);
         $admin->refresh();
@@ -615,14 +614,14 @@ class AdminController extends Controller
     public function update(Request $request, Admin $admin): JsonResponse
     {
         $actor = $request->user('admin');
-        $validated = Admin::getValidate($request);
-        if (array_key_exists('email', $validated)) {
-            if (Admin::checkEmailExists($validated, $admin, true)) {
-                throw ValidationException::withMessages([
-                    'email' => ['该邮箱已被使用。'],
-                ]);
-            }
-        }
+        $validated = Admin::getValidate($request, $admin);
+        // if (array_key_exists('email', $validated)) {
+        //     if (Admin::checkEmailExists($validated, $admin, true)) {
+        //         throw ValidationException::withMessages([
+        //             'email' => ['该邮箱已被使用。'],
+        //         ]);
+        //     }
+        // }
 
         if (! $this->canManageAdminProfile($actor, $admin)) {
             return response()->json([

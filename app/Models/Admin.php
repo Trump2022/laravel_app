@@ -9,6 +9,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 #[Fillable(['name', 'email', 'password'])]
 #[Hidden(['password', 'remember_token'])]
@@ -87,9 +88,10 @@ class Admin extends Authenticatable
 
     /**
      * @param Request $request
+     * @param Admin $admin
      * @return array
      */
-    public static function getValidate(Request $request): array
+    public static function getValidate(Request $request, Admin $admin): array
     {
         return $request->validate([
             'name' => ['sometimes', 'required', 'string', 'max:255'],
@@ -99,8 +101,10 @@ class Admin extends Authenticatable
                 'string',
                 'email',
                 'max:255',
-                // Rule::unique('admins', 'email')->ignore($admin->getKey()),
+                Rule::unique('admins', 'email')->ignore($admin->getKey()),
             ],
+        ], [
+            'email.unique' => '该邮箱已被使用。',
         ]);
     }
 

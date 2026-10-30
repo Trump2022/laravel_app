@@ -11,7 +11,6 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use App\Models\Permission;
 use App\Models\Role;
-use Illuminate\Validation\Rule;
 
 class AuthController extends Controller
 {
@@ -80,22 +79,21 @@ class AuthController extends Controller
      */
     public function updateOwnProfile(Request $request): JsonResponse
     {
-        $admin = $request->user('admin');
-        $validated = Admin::getValidate($request);
+        $actor = $request->user('admin');
+        $validated = Admin::getValidate($request, $actor);
+        // if (array_key_exists('email', $validated)) {
+        //     if (Admin::checkEmailExists($validated, $actor, true)) {
+        //         throw ValidationException::withMessages([
+        //             'email' => ['该邮箱已被使用。'],
+        //         ]);
+        //     }
+        // }
 
-        if (array_key_exists('email', $validated)) {
-            if (Admin::checkEmailExists($validated, $admin, true)) {
-                throw ValidationException::withMessages([
-                    'email' => ['该邮箱已被使用。'],
-                ]);
-            }
-        }
-
-        $admin->update($validated);
-        $admin->refresh();
+        $actor->update($validated);
+        $actor->refresh();
 
         return response()->json([
-            'data' => $this->adminData($admin),
+            'data' => $this->adminData($actor),
         ]);
     }
 
