@@ -81,18 +81,15 @@ class AuthController extends Controller
     public function updateOwnProfile(Request $request): JsonResponse
     {
         $admin = $request->user('admin');
+        $validated = Admin::getValidate($request);
 
-        $validated = $request->validate([
-            'name' => ['sometimes', 'required', 'string', 'max:255'],
-            'email' => [
-                'sometimes',
-                'required',
-                'string',
-                'email',
-                'max:255',
-                Rule::unique('admins', 'email')->ignore($admin->getKey()),
-            ],
-        ]);
+        if (array_key_exists('email', $validated)) {
+            if (Admin::checkEmailExists($validated, $admin, true)) {
+                throw ValidationException::withMessages([
+                    'email' => ['该邮箱已被使用。'],
+                ]);
+            }
+        }
 
         $admin->update($validated);
         $admin->refresh();
@@ -149,6 +146,8 @@ class AuthController extends Controller
             'admin.roles.store:post',
             'admin.admins.store:post',
             'admin.permissions.store:post',
+            'admin.admins.destroy:delete',
+            'admin.roles.destroy:delete',
         ];
 
         $permissions = Permission::query()
@@ -161,12 +160,8 @@ class AuthController extends Controller
         $isDeveloper = in_array(Role::DEVELOPER_CODE, $roleCodes, true);
         $isSuperAdmin = in_array(Role::SUPER_ADMIN_CODE, $roleCodes, true);
 
-        $hasApiPermission = function (string $permissionCode) use (
-            $isDeveloper,
-            $isSuperAdmin,
-            $roleIds,
-            $permissions,
-        ): bool {
+        $hasApiPermission = function (string $permissionCode) use (  $isDeveloper, $isSuperAdmin,  $roleIds,  $permissions  ): bool
+        {
             if ($isDeveloper) {
                 return true;
             }
@@ -208,6 +203,8 @@ class AuthController extends Controller
             'can_create_roles' => $hasApiPermission('admin.roles.store:post'),
             'can_create_admins' => $hasApiPermission('admin.admins.store:post'),
             'can_create_permissions' => $hasApiPermission('admin.permissions.store:post'),
+            'can_delete_admins' => $hasApiPermission('admin.admins.destroy:delete'),
+            'can_delete_roles' => $hasApiPermission('admin.roles.destroy:delete'),
         ];
     }
 }

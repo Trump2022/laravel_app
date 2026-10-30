@@ -7,6 +7,8 @@ const roles = ref([]);
 const loading = ref(false);
 const errorMessage = ref('');
 
+const deletingRoleId = ref(null);
+
 const emit = defineEmits(['success']);
 
 const creating = ref(false);
@@ -70,6 +72,36 @@ const visiblePermissionRows = computed(() => {
         return true;
     });
 });
+
+async function deleteRole(role) {
+    deletingRoleId.value = role.id;
+    errorMessage.value = '';
+
+    try {
+        await apiRequest(`/api/admin/roles/${role.id}`, {
+            method: 'DELETE',
+        });
+
+        const page = roles.value.length === 1 && currentPage.value > 1
+            ? currentPage.value - 1
+            : currentPage.value;
+
+        if (selectedRole.value?.id === role.id) {
+            cancelEditing();
+        }
+
+        if (selectedPermissionRole.value?.id === role.id) {
+            closeEditingPermissions();
+        }
+
+        await loadRoles(page);
+        emit('success', '角色已删除。');
+    } catch (error) {
+        errorMessage.value = error.message;
+    } finally {
+        deletingRoleId.value = null;
+    }
+}
 
 function isMenuPermission(permission) {
     return [1, 2].includes(Number(permission.type));
@@ -662,6 +694,30 @@ onMounted(loadRoles);
                             @click="startEditingPermissions(role)">
                             修改权限
                         </button>
+
+                        <el-popconfirm
+                            v-if="props.admin.can_delete_roles && !['developer', 'super_admin'].includes(role.code)"
+                            title="确定删除这个角色吗？"
+                            confirm-button-text="删除"
+                            cancel-button-text="取消"
+                            @confirm="deleteRole(role)"
+                            >
+
+                            <template #reference>
+                                <el-button
+                                    size="small"
+                                    type="danger"
+                                    :disabled="role.admins_exists || role.permissions_exists"
+                                    :loading="deletingRoleId === role.id"
+                                    :title="
+                                        role.admins_exists || role.permissions_exists
+                                            ? '角色仍有关联的管理员或权限，不能删除。'
+                                            : ''
+                                    "
+                                    >删除
+                                </el-button>
+                            </template>
+                        </el-popconfirm>
                     </td>
                 </tr>
                 </tbody>

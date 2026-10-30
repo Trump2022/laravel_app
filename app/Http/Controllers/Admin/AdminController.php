@@ -7,10 +7,12 @@ use App\Models\Admin;
 use App\Models\Role;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
+// use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use App\Models\Permission;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class AdminController extends Controller
 {
@@ -94,6 +96,7 @@ class AdminController extends Controller
                                 ! $targetCanDisableAdmins
                                 || $this->adminPrivilegeLevel($admin) < $actorPrivilegeLevel
                             ),
+                        'can_delete_this_admin' => $this->canDeleteAdmin($actor, $admin),
                     ];
             },
         );
@@ -276,6 +279,43 @@ class AdminController extends Controller
 
         return response()->json([
             'data' => $this->adminData($admin),
+        ]);
+    }
+
+    /**
+     * @param Request $request
+     * @param Admin $admin
+     * @return JsonResponse
+     * @throws \Throwable
+     */
+    public function destroy(Request $request, Admin $admin): JsonResponse
+    {
+        $actor = $request->user('admin');
+
+        if (!$this->canDeleteAdmin($actor, $admin)) {
+            return response()->json([
+                'message' => '不能删除自己的账号或权限等级相同及更高的管理员。',
+            ], 403);
+        }
+
+        DB::transaction(function () use ($admin): void {
+            $admin->roles()->detach();
+            $admin->delete();
+
+            $emailBase = preg_replace('/_del_\d+$/', '', $admin->email) ?? $admin->email;
+            $suffix = '_del_'.$admin->getKey();
+
+            $admin->email = Str::substr(
+                    $emailBase,
+                    0,
+                    255 - Str::length($suffix),
+                ).$suffix;
+
+            $admin->save();
+        });
+
+        return response()->json([
+            'message' => '管理员已删除。',
         ]);
     }
 
@@ -470,8 +510,26 @@ class AdminController extends Controller
             'PATCH',
         );
 
-        return ! $targetCanDisableAdmins
-            || $this->adminPrivilegeLevel($target) < $this->adminPrivilegeLevel($actor);
+        return ! $targetCanDisableAdmins || $this->adminPrivilegeLevel($target) < $this->adminPrivilegeLevel($actor);
+    }
+
+    /**
+     * @param Admin $actor
+     * @param Admin $target
+     * @return bool
+     */
+    private function canDeleteAdmin(Admin $actor, Admin $target): bool
+    {
+        if ($actor->getKey() === $target->getKey()) {
+            return false;
+        }
+
+        $targetDeleteAdmins = $target->hasApiPermission(
+            'admin.admins.destroy',
+            'DELETE',
+        );
+
+        return ! $targetDeleteAdmins || $this->adminPrivilegeLevel($target) < $this->adminPrivilegeLevel($actor);
     }
 
     /**
@@ -485,8 +543,7 @@ class AdminController extends Controller
             return false;
         }
 
-        return $actor->is($target)
-            || ! $this->targetHasEqualOrHigherPasswordResetPrivilege($actor, $target);
+        return $actor->is($target) || ! $this->targetHasEqualOrHigherPasswordResetPrivilege($actor, $target);
     }
 
     /**
@@ -500,17 +557,19 @@ class AdminController extends Controller
             return false;
         }
 
-        return ! $actor->is($target)
-            && ! $this->targetHasEqualOrHigherPasswordResetPrivilege($actor, $target);
+        return ! $actor->is($target)  && ! $this->targetHasEqualOrHigherPasswordResetPrivilege($actor, $target);
     }
 
     /**
+     * 目标用户无此权限 或 目标用户角色等级更低, 才能返回false
+     *
      * @param Admin $actor
      * @param Admin $target
      * @return bool
      */
     private function targetHasEqualOrHigherPasswordResetPrivilege(Admin $actor, Admin $target): bool
     {
+        //目标用户无此权限
         if (! $target->hasApiPermission('admin.admins.password', 'PATCH')) {
             return false;
         }
@@ -529,9 +588,16 @@ class AdminController extends Controller
     {
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:admins,email'],
+            // 'email' => ['required', 'string', 'email', 'max:255', 'unique:admins,email'],
+            'email' => ['required', 'string', 'email', 'max:255'],
             'password' => ['required', 'string', 'min:8'],
         ]);
+
+        if (Admin::checkEmailExists($validated)) {
+            throw ValidationException::withMessages([
+                'email' => ['该邮箱已被使用。'],
+            ]);
+        }
 
         $admin = Admin::create($validated);
         $admin->refresh();
@@ -548,19 +614,15 @@ class AdminController extends Controller
      */
     public function update(Request $request, Admin $admin): JsonResponse
     {
-        $validated = $request->validate([
-            'name' => ['sometimes', 'required', 'string', 'max:255'],
-            'email' => [
-                'sometimes',
-                'required',
-                'string',
-                'email',
-                'max:255',
-                Rule::unique('admins', 'email')->ignore($admin->getKey()),
-            ],
-        ]);
-
         $actor = $request->user('admin');
+        $validated = Admin::getValidate($request);
+        if (array_key_exists('email', $validated)) {
+            if (Admin::checkEmailExists($validated, $admin, true)) {
+                throw ValidationException::withMessages([
+                    'email' => ['该邮箱已被使用。'],
+                ]);
+            }
+        }
 
         if (! $this->canManageAdminProfile($actor, $admin)) {
             return response()->json([
@@ -619,15 +681,10 @@ class AdminController extends Controller
         ]);
         $actor = $request->user('admin');
         $status = (bool) $validated['status'];
-        if (! $status && $actor->getKey() === $admin->getKey()) {
-            return response()->json([
-                'message' => '不能停用自己的账号。',
-            ], 403);
-        }
 
         if (! $status && ! $this->canDisableAdmin($actor, $admin)) {
             return response()->json([
-                'message' => '不能停用权限等级相同或更高的管理员。',
+                'message' => '不能停用自己或权限等级相同或更高的管理员。',
             ], 403);
         }
 

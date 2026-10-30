@@ -28,6 +28,7 @@ class RoleController extends Controller
         $actor = $request->user('admin');
         $query = Role::query()
             ->select(['id', 'name', 'code', 'remark'])
+            ->withExists(['admins', 'permissions'])
             ->orderBy('id');
 
         $actor->loadMissing('roles:id,code');
@@ -160,6 +161,35 @@ class RoleController extends Controller
                 'code' => $role->code,
                 'remark' => $role->remark,
             ],
+        ]);
+    }
+
+    /**
+     * @param Role $role
+     * @return JsonResponse
+     * @throws Throwable
+     */
+    public function destroy(Role $role): JsonResponse
+    {
+        if (in_array($role->code, [
+            Role::DEVELOPER_CODE,
+            Role::SUPER_ADMIN_CODE,
+        ], true)) {
+            abort(403, '开发者和超管角色不能删除。');
+        }
+
+        if ($role->admins()->exists() || $role->permissions()->exists()) {
+            abort(409, '角色仍有关联的管理员或权限，不能删除。');
+        }
+
+        DB::transaction(function () use ($role): void {
+            $role->admins()->detach();
+            $role->permissions()->detach();
+            $role->delete();
+        });
+
+        return response()->json([
+            'message' => '角色已删除。',
         ]);
     }
 

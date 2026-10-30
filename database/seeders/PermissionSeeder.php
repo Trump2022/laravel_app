@@ -155,6 +155,14 @@ class PermissionSeeder extends Seeder
                 'sort' => 2,
             ],
             [
+                'key' => 'role_destroy',
+                'name' => '删除角色',
+                'type' => 3,
+                'pid' => 'roles',
+                'permission_code' => 'admin.roles.destroy:delete',
+                'sort' => 6,
+            ],
+            [
                 'key' => 'role_permissions_index',
                 'name' => '查看角色权限',
                 'type' => 3,
@@ -219,6 +227,14 @@ class PermissionSeeder extends Seeder
                 'pid' => 'admins',
                 'permission_code' => 'admin.admins.password:patch',
                 'sort' => 4,
+            ],
+            [
+                'key' => 'admin_destroy',
+                'name' => '删除管理员',
+                'type' => 3,
+                'pid' => 'admins',
+                'permission_code' => 'admin.admins.destroy:delete',
+                'sort' => 5,
             ],
             [
                 'key' => 'admin_roles_assign',

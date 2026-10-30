@@ -7,11 +7,15 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Http\Request;
 
 #[Fillable(['name', 'email', 'password'])]
 #[Hidden(['password', 'remember_token'])]
 class Admin extends Authenticatable
 {
+    use SoftDeletes;
+
     protected function casts(): array
     {
         return [
@@ -78,6 +82,44 @@ class Admin extends Authenticatable
             ->whereHas('permissions', function (Builder $query) use ($permission): void {
                 $query->whereKey($permission->getKey());
             })
+            ->exists();
+    }
+
+    /**
+     * @param Request $request
+     * @return array
+     */
+    public static function getValidate(Request $request): array
+    {
+        return $request->validate([
+            'name' => ['sometimes', 'required', 'string', 'max:255'],
+            'email' => [
+                'sometimes',
+                'required',
+                'string',
+                'email',
+                'max:255',
+                // Rule::unique('admins', 'email')->ignore($admin->getKey()),
+            ],
+        ]);
+    }
+
+    /**
+     * email是否存在
+     *
+     * @param array $validated
+     * @param Admin|null $admin
+     * @param bool $isEdit | 为true是编辑
+     * @return bool
+     */
+    public static function checkEmailExists(array $validated, ?Admin $admin = null, bool $isEdit = false): bool
+    {
+        return Admin::query()
+            ->where('email', $validated['email'])
+            ->when(
+                $isEdit,
+                fn (Builder $query) => $query->where('id', '!=', $admin->getKey()),
+            )
             ->exists();
     }
 }

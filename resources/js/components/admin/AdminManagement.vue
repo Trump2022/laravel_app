@@ -2,6 +2,30 @@
 import { onMounted, onUnmounted, ref } from 'vue';
 import {apiRequest} from '../../api';
 
+const deletingAdminId = ref(null);
+
+async function deleteAdmin(item) {
+    deletingAdminId.value = item.id;
+    adminErrorMessage.value = '';
+
+    try {
+        await apiRequest(`/api/admin/admins/${item.id}`, {
+            method: 'DELETE',
+        });
+
+        const page = admins.value.length === 1 && currentPage.value > 1
+            ? currentPage.value - 1
+            : currentPage.value;
+
+        await loadAdmins(page);
+        emit('success', '管理员已删除。');
+    } catch (error) {
+        adminErrorMessage.value = error.message;
+    } finally {
+        deletingAdminId.value = null;
+    }
+}
+
 const props = defineProps({
     admin: {
         type: Object,
@@ -694,6 +718,26 @@ onMounted(() => {
                             @click="startEditingRoles(item)">
                             修改角色
                         </button>
+
+                        <el-popconfirm
+                            v-if="props.admin.can_delete_admins && item.can_delete_this_admin"
+                            title="确定删除该管理员吗？"
+                            confirm-button-text="删除"
+                            cancel-button-text="取消"
+                            @confirm="deleteAdmin(item)"
+                        >
+                            <template #reference>
+                                <el-button
+                                    size="small"
+                                    type="danger"
+                                    :loading="deletingAdminId === item.id"
+                                    :disabled="deletingAdminId !== null"
+                                >
+                                    删除
+                                </el-button>
+                            </template>
+                        </el-popconfirm>
+
                     </td>
                 </tr>
                 </tbody>

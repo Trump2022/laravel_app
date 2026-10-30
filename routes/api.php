@@ -38,12 +38,14 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('roles', [RoleController::class, 'index'])->name('roles.index'); // 获取角色列表
             Route::post('roles', [RoleController::class, 'store'])->name('roles.store'); // 创建角色
             Route::patch('roles/{role}', [RoleController::class, 'update'])->name('roles.update'); // 更新角色信息
+            Route::delete('roles/{role}', [RoleController::class, 'destroy'])->name('roles.destroy'); // 删除角色
 
             Route::get('admins', [AdminController::class, 'index'])->name('admins.index'); // 获取管理员列表
             Route::post('admins', [AdminController::class, 'store'])->name('admins.store'); // 创建管理员
             Route::patch('admins/{admin}', [AdminController::class, 'update'])->name('admins.update'); // 更新管理员信息
             Route::patch('admins/{admin}/status', [AdminController::class, 'updateStatus'])->name('admins.status'); // 启用或停用管理员
             Route::patch('admins/{admin}/password', [AdminController::class, 'updatePassword'])->name('admins.password'); // 重置管理员密码
+            Route::delete('admins/{admin}', [AdminController::class, 'destroy'])->name('admins.destroy'); // 软删除管理员
             Route::put('admins/{admin}/roles/{role}', [AdminController::class, 'assignRole'])->name('admins.roles.assign'); // 为管理员分配角色
             Route::delete('admins/{admin}/roles/{role}', [AdminController::class, 'revokeRole'])->name('admins.roles.revoke'); // 移除管理员角色
             Route::get('admins/{admin}/role-options', [AdminController::class, 'roleOptions'])->name('admins.role-options'); // 获取管理员可分配及已拥有的角色
