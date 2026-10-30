@@ -276,7 +276,6 @@ async function toggleRolePermission(permission, event) {
             }
         }
     } catch (error) {
-        // errorMessage.value = error.message;
         ElMessage.error(error.message);
     } finally {
         unlockPermissions(lockedPermissionIds);
