@@ -74,6 +74,7 @@ class PermissionSeeder extends Seeder
                 'type' => 3,
                 'pid' => 'permissions',
                 'permission_code' => 'admin.permissions.index:get',
+                'developer_only' => 1,
                 'sort' => 0,
             ],
             [
@@ -82,6 +83,7 @@ class PermissionSeeder extends Seeder
                 'type' => 3,
                 'pid' => 'permissions',
                 'permission_code' => 'admin.permissions.tree:get',
+                'developer_only' => 1,
                 'sort' => 1,
             ],
             [

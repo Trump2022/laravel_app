@@ -65,7 +65,7 @@ class RoleSeeder extends Seeder
                 $permissionIds = Permission::where(
                     'permission_code',
                     'admin.dashboard.index:get'
-                )->pluck('id');
+                )->orWhere('path', '/admin/dashboard')->pluck('id');
             }
 
             $role->permissions()->syncWithoutDetaching($permissionIds->all());

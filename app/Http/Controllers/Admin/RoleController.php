@@ -300,21 +300,45 @@ class RoleController extends Controller
             ]));
         }
 
-        //移除角色的权限时,不能使目标角色失去角色分配权限
-        $assignPermissionId = Permission::query()
-            ->where('permission_code', 'admin.roles.permissions.assign:put')
-            ->where('type', 3)
-            ->value('id');
-        if (
-            ! $actorIsDeveloper
-            && ! $actorIsSuperAdmin
-            && $assignPermissionId !== null
-            && in_array((int) $assignPermissionId, $permissionIds, true)
-            && $role->permissions()
-                ->where('permissions.id', $assignPermissionId)
-                ->exists()
-        ) {
-            abort(403, '不能移除目标角色的角色权限分配权限。');
+        if (! $actorIsDeveloper && ! $actorIsSuperAdmin) {
+            $actor = $request->user('admin');
+            $actor->loadMissing('roles:id');
+
+            //当前操作者是否拥有正在编辑的目标角色
+            $actorOwnsTargetRole = $actor->roles->contains(
+                fn (Role $actorRole): bool => $actorRole->is($role),
+            );
+
+            //当前操作者有其它角色
+            if ($actorOwnsTargetRole) {
+                //找出他的其它角色
+                $otherRoleIds = $actor->roles
+                    ->reject(fn (Role $actorRole): bool => $actorRole->is($role)) //把满足条件的元素 过滤掉, 剔除当前正在操作的角色
+                    ->modelKeys();
+
+                //如果其它角色没有该权限
+                $willLosePermission = $role->permissions()
+                    ->whereIn('permissions.id', $permissionIds)
+                    ->whereDoesntHave('roles', function ($query) use ($otherRoleIds): void {
+                        $query->whereIn('roles.id', $otherRoleIds);
+                    })
+                    ->exists();
+
+                if ($willLosePermission) {
+                    abort(403, '不能撤销自己唯一拥有的权限。');
+                }
+            }
+
+            if (
+                // 如果当前的操作是移除目标角色的 "移除角色权限" 这个权限, 就阻止
+                $role->permissions()
+                    ->whereIn('permissions.id', $permissionIds)
+                    ->where('permissions.permission_code', 'admin.roles.permissions.revoke:delete')
+                    ->where('permissions.type', 3)
+                    ->exists()
+            ) {
+                abort(403, '不能移除目标角色的撤销角色权限。');
+            }
         }
 
         DB::transaction(function () use ($role, $permissionIds): void {

@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { apiRequest } from '../../api';
+import { ElMessage } from 'element-plus';
 
 const roles = ref([]);
 const loading = ref(false);
@@ -236,7 +237,11 @@ function closeEditingPermissions() {
     permissionRows.value = [];
 }
 
-async function toggleRolePermission(permission, checked) {
+async function toggleRolePermission(permission, event) {
+    const checkbox = event.currentTarget;
+    const checked = checkbox.checked;
+    checkbox.checked = permission.assigned;
+
     const roleId = selectedPermissionRole.value.id;
     const relatedPermissionIds = checked
         ? getPermissionAncestorIds(permission)
@@ -271,7 +276,8 @@ async function toggleRolePermission(permission, checked) {
             }
         }
     } catch (error) {
-        errorMessage.value = error.message;
+        // errorMessage.value = error.message;
+        ElMessage.error(error.message);
     } finally {
         unlockPermissions(lockedPermissionIds);
     }
@@ -405,7 +411,11 @@ onMounted(loadRoles);
 
 <template>
     <section class="mt-6 w-full rounded-xl bg-white p-6 shadow">
-        <p v-if="errorMessage" class="mb-4 text-sm text-red-600">
+        <p
+            v-if="errorMessage"
+            role="alert"
+            class="fixed left-1/2 top-20 z-50 max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded border border-red-200 bg-white px-4 py-3 text-sm text-red-700 shadow-lg"
+            >
             {{ errorMessage }}
         </p>
 
@@ -590,17 +600,9 @@ onMounted(loadRoles);
                     <input
                         type="checkbox"
                         :checked="permission.assigned"
-                        :disabled="
-                                permission.locked
-                                || isPermissionUpdating(permission.id)
-                            "
-                                @change="
-                            toggleRolePermission(
-                                permission,
-                                $event.target.checked,
-                            )
-                        "
-                    >
+                        :disabled=" permission.locked || isPermissionUpdating(permission.id)"
+                        @change="toggleRolePermission(permission, $event)"
+                        >
 
                     <span>{{ permission.name }}</span>
                     <span class="text-xs text-slate-500">
