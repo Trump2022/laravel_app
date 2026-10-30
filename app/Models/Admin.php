@@ -10,10 +10,12 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use PHPOpenSourceSaver\JWTAuth\Contracts\JWTSubject;
 
 #[Fillable(['name', 'email', 'password'])]
 #[Hidden(['password', 'remember_token'])]
-class Admin extends Authenticatable
+class Admin extends Authenticatable implements JWTSubject
+// class Admin extends Authenticatable//guards的driver不是JWT是session时,这样继续就行了
 {
     use SoftDeletes;
 
@@ -25,6 +27,16 @@ class Admin extends Authenticatable
             'created_at' => 'datetime:Y-m-d H:i:s',
             'updated_at' => 'datetime:Y-m-d H:i:s',
         ];
+    }
+
+    public function getJWTIdentifier(): mixed
+    {
+        return $this->getKey();
+    }
+
+    public function getJWTCustomClaims(): array
+    {
+        return [];
     }
 
     public function roles(): BelongsToMany

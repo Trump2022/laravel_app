@@ -14,16 +14,15 @@ Route::get('/user', function (Request $request) {
 })->middleware('auth:sanctum'); // 获取当前 Sanctum 用户信息
 
 Route::prefix('admin')->name('admin.')->group(function () {
-    Route::post('login', [AuthController::class, 'login'])->name('login'); // 管理员登录
+    Route::post('login', [AuthController::class, 'login'])->middleware('throttle:5,1')->name('login'); // 管理员登录,限制每分钟最多5次请求
 
     Route::middleware(['auth:admin', EnsureAdminIsActive::class])->group(function () {
         Route::patch('me/password', [AuthController::class, 'updateOwnPassword'])->name('me.password'); // 修改当前管理员密码
         Route::patch('me/profile', [AuthController::class, 'updateOwnProfile'])->name('me.profile'); //编辑我的资料
         Route::post('logout', [AuthController::class, 'logout'])->name('logout'); // 管理员退出登录
-
+        Route::post('refresh', [AuthController::class, 'refresh'])->name('refresh'); // 刷新 JWT Token
         Route::get('me', [AuthController::class, 'me'])->name('me'); // 获取当前管理员信息及能力
         Route::get('menu/tree', [PermissionController::class, 'menuTree'])->name('menu.tree'); // 获取当前管理员可见的菜单树
-
 
         Route::middleware(CheckAdminPermission::class)->group(function () {
             Route::get('dashboard/index', function () {

@@ -11,14 +11,17 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use App\Models\Permission;
 use App\Models\Role;
+use PHPOpenSourceSaver\JWTAuth\Exceptions\JWTException;
 
 class AuthController extends Controller
 {
     /**
+     * 登录 (适用于guards的driver不是JWT是session)
+     *
      * @param Request $request
      * @return JsonResponse
      */
-    public function login(Request $request): JsonResponse
+    public function loginAsSession(Request $request): JsonResponse
     {
         $credentials = $request->validate([
             'email' => ['required', 'email'],
@@ -49,14 +52,88 @@ class AuthController extends Controller
     }
 
     /**
+     * 刷新 JWT Token
+     *
+     * @return JsonResponse
+     */
+    public function refresh(): JsonResponse
+    {
+        $guard = Auth::guard('admin');
+
+        try {
+            $token = $guard->refresh();
+        } catch (JWTException $exception) {
+            return response()->json([
+                'message' => '登录已过期，请重新登录。',
+            ], 401);
+        }
+
+        return response()->json([
+            'access_token' => $token,
+            'token_type' => 'bearer',
+            'expires_in' => $guard->getTTL() * 60,
+        ]);
+    }
+
+    /**
      * @param Request $request
      * @return JsonResponse
      */
-    public function logout(Request $request): JsonResponse
+    public function login(Request $request): JsonResponse
+    {
+        $credentials = $request->validate([
+            'email' => ['required', 'email'],
+            'password' => ['required', 'string'],
+        ]);
+
+        $token = Auth::guard('admin')->attempt($credentials);
+
+        if ($token === false) {
+            throw ValidationException::withMessages([
+                'email' => ['邮箱或密码错误。'],
+            ]);
+        }
+
+        $admin = Auth::guard('admin')->user();
+
+        if (!$admin->status) {
+            Auth::guard('admin')->logout();
+
+            throw ValidationException::withMessages([
+                'email' => ['邮箱或密码错误。'],
+            ]);
+        }
+
+        return response()->json(array_merge(
+            $this->adminData($admin),
+            [
+                'access_token' => $token,
+                'token_type' => 'bearer',
+                'expires_in' => Auth::guard('admin')->getTTL() * 60,
+            ],
+        ));
+    }
+
+    /**
+     * 登出 (适用于guards的driver不是JWT是session)
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function logoutAsSession(Request $request): JsonResponse
     {
         Auth::guard('admin')->logout();
         $request->session()->regenerate();
 
+        return response()->json([
+            'message' => '已退出登录。',
+        ]);
+    }
+
+
+    public function logout(): JsonResponse
+    {
+        Auth::guard('admin')->logout();
         return response()->json([
             'message' => '已退出登录。',
         ]);

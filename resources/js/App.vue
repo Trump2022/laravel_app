@@ -31,6 +31,21 @@ let successMessageTimer = null;
 const route = useRoute();
 const router = useRouter();
 
+// JWT token 存储
+const tokenKey = 'admin_access_token';
+const tokenRotatedAtKey = 'admin_access_token_rotated_at';
+
+function saveToken(accessToken) {
+    localStorage.setItem(tokenKey, accessToken);
+    localStorage.setItem(tokenRotatedAtKey, String(Date.now()));
+}
+
+function clearJwtAuth() {
+    localStorage.removeItem(tokenKey);
+    localStorage.removeItem(tokenRotatedAtKey);
+    admin.value = null;
+}
+
 function updateAdminProfile(updatedAdmin) {
     admin.value = updatedAdmin;
 }
@@ -73,9 +88,12 @@ onUnmounted(() => {
     if (successMessageTimer !== null) {
         clearTimeout(successMessageTimer);
     }
+    window.removeEventListener('admin-auth-expired', handleAuthExpired);
 });
 
 onMounted(async () => {
+    window.addEventListener('admin-auth-expired', handleAuthExpired);
+
     try {
         admin.value = await apiRequest('/api/admin/me');
     } catch (error) {
@@ -85,27 +103,47 @@ onMounted(async () => {
     }
 });
 
+function handleAuthExpired() {
+    clearJwtAuth();
+}
+
 async function login() {
     loading.value = true;
     errorMessage.value = '';
 
     try {
-        const csrfResponse = await fetch('/sanctum/csrf-cookie', {
-            credentials: 'same-origin',
-        });
+        // 适用于session模式
+        // const csrfResponse = await fetch('/sanctum/csrf-cookie', {
+        //     credentials: 'same-origin',
+        // });
+        //
+        // if (!csrfResponse.ok) {
+        //     errorMessage.value = '获取 CSRF Cookie 失败，请检查 Sanctum 路由配置。';
+        //     return;
+        // }
+        //
+        // admin.value = await apiRequest('/api/admin/login', {
+        //     method: 'POST',
+        //     body: JSON.stringify({
+        //         email: email.value,
+        //         password: password.value,
+        //     }),
+        // });
 
-        if (!csrfResponse.ok) {
-            errorMessage.value = '获取 CSRF Cookie 失败，请检查 Sanctum 路由配置。';
-            return;
-        }
-
-        admin.value = await apiRequest('/api/admin/login', {
+        // 适用于JWT模式
+        const response = await apiRequest('/api/admin/login', {
             method: 'POST',
             body: JSON.stringify({
                 email: email.value,
                 password: password.value,
             }),
         });
+        const { access_token: accessToken, ...adminData } = response;
+        // sessionStorage.setItem('admin_access_token', accessToken);//默认为会按选项卡隔离
+        // localStorage.setItem('admin_access_token', accessToken);//localStorage 会让 token 在多个标签间共享
+        // saveToken(accessToken, response.expires_in);//保存token和过期时间，并设置刷新定时器
+        saveToken(accessToken);
+        admin.value = adminData;
 
         password.value = '';
     } catch (error) {
@@ -115,6 +153,22 @@ async function login() {
     }
 }
 
+// 适用于session模式
+// async function logout() {
+//     errorMessage.value = '';
+//
+//     try {
+//         await apiRequest('/api/admin/logout', {
+//             method: 'POST',
+//         });
+//
+//         admin.value = null;
+//     } catch (error) {
+//         errorMessage.value = error.message;
+//     }
+// }
+
+// 适用于JWT模式
 async function logout() {
     errorMessage.value = '';
 
@@ -122,10 +176,10 @@ async function logout() {
         await apiRequest('/api/admin/logout', {
             method: 'POST',
         });
-
-        admin.value = null;
     } catch (error) {
         errorMessage.value = error.message;
+    } finally {
+        clearJwtAuth();
     }
 }
 </script>
