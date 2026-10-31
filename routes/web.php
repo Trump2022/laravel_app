@@ -16,5 +16,10 @@ if (app()->environment('local')) {
     //     return view('vue-learning');
     // });
     Route::fallback(fn() => view('vue-learning'));// 处理所有未匹配的路由，返回 vue-learning 视图, 与上面注释掉的闭包写法完全等同
+} else {
+    $frontend = fn () => response()->file(base_path('dist/index.html'));
+    Route::get('/', $frontend);
+    Route::get('/web/{path?}', $frontend)->where('path', '.*');
+    Route::get('/admin/{path?}', $frontend)->where('path', '.*');
 }
 
