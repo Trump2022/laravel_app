@@ -1,6 +1,6 @@
 <script setup>
 import { apiRequest } from './api';
-import { nextTick, onMounted, onUnmounted, ref } from 'vue';
+import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { RouterView, useRoute, useRouter } from 'vue-router';
 import { pageRouteNames } from './router';
 import AdminLayout from './components/admin/AdminLayout.vue';
@@ -30,6 +30,40 @@ let successMessageTimer = null;
 
 const route = useRoute();
 const router = useRouter();
+
+const siteTitles = ref({});
+
+function applySiteTitle() {
+    const key = route.meta.withAdmin
+        ? 'web_admin_title'
+        : 'web_title';
+    const title = siteTitles.value[key];
+
+    if (typeof title === 'string' && title.trim() !== '') {
+        document.title = title.trim();
+    }
+}
+
+watch(() => route.meta.withAdmin, applySiteTitle);
+
+async function loadSiteTitles() {
+    try {
+        const response = await fetch(
+            '/api/web/site-settings?keys=web_title,web_admin_title',
+            { headers: { Accept: 'application/json' } },
+        );
+
+        if (!response.ok) {
+            return;
+        }
+
+        const result = await response.json();
+        siteTitles.value = result.data ?? {};
+        applySiteTitle();
+    } catch {
+        // 请求失败时保留默认标题。
+    }
+}
 
 // JWT token 存储
 const tokenKey = 'admin_access_token';
@@ -84,6 +118,31 @@ function clearSuccessMessage() {
     }
 }
 
+async function loadSiteTitle() {
+    try {
+        const response = await fetch(
+            '/api/web/site-settings?keys=web_title',
+            {
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin',
+            },
+        );
+
+        if (!response.ok) {
+            return;
+        }
+
+        const result = await response.json();
+        const title = result.data?.web_title;
+
+        if (typeof title === 'string' && title.trim() !== '') {
+            document.title = title.trim();
+        }
+    } catch {
+        // 请求失败时保留 Blade 中的默认标题。
+    }
+}
+
 onUnmounted(() => {
     if (successMessageTimer !== null) {
         clearTimeout(successMessageTimer);
@@ -93,6 +152,16 @@ onUnmounted(() => {
 
 onMounted(async () => {
     window.addEventListener('admin-auth-expired', handleAuthExpired);
+
+    void loadSiteTitle();
+
+    await router.isReady();
+
+    void loadSiteTitles();
+
+    if (!route.meta.withAdmin) {
+        return;
+    }
 
     try {
         admin.value = await apiRequest('/api/admin/me');
@@ -185,7 +254,8 @@ async function logout() {
 </script>
 
 <template>
-    <main class="min-h-screen bg-slate-100 p-4 sm:p-6 text-slate-900">
+    <RouterView v-if="!route.meta.withAdmin" />
+    <main v-else class="min-h-screen bg-slate-100 p-4 sm:p-6 text-slate-900">
         <section class="rounded-xl bg-white p-8 shadow">
             <template v-if="admin">
                 <AdminLayout

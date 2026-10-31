@@ -8,10 +8,17 @@ use App\Http\Middleware\CheckAdminPermission;
 use App\Http\Middleware\EnsureAdminIsActive;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Admin\SettingController;
+use App\Http\Controllers\Web\SettingController as WebSettingController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum'); // 获取当前 Sanctum 用户信息
+
+Route::prefix('web')->name('web.')->group(function () {
+    Route::get('site-settings', [WebSettingController::class, 'getWebSiteSettings'])
+        ->name('settings');
+});
 
 Route::prefix('admin')->name('admin.')->group(function () {
     Route::post('login', [AuthController::class, 'login'])->middleware('throttle:5,1')->name('login'); // 管理员登录,限制每分钟最多5次请求
@@ -55,6 +62,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::delete('permissions/{permission}', [PermissionController::class, 'destroy'])->name('permissions.destroy'); // 删除权限
             Route::patch('permissions/{permission}/move', [PermissionController::class, 'move'])->name('permissions.move'); // 调整权限节点顺序
 
+            // 设置
+            Route::get('settings', [SettingController::class, 'index'])->name('settings.index'); // 获取设置列表
+            Route::post('settings', [SettingController::class, 'store'])->name('settings.store');   // 创建设置
+            Route::get('settings/{setting}', [SettingController::class, 'show'])->name('settings.show'); // 获取单个设置项
+            Route::put('settings/{setting}', [SettingController::class, 'update'])->name('settings.update'); // 更新设置
+            Route::delete('settings/{setting}', [SettingController::class, 'destroy'])->name('settings.destroy'); // 删除设置
         });
     });
 });

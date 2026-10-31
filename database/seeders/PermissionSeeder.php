@@ -10,15 +10,39 @@ class PermissionSeeder extends Seeder
     public function run(): void
     {
         $items = [
+
+            // 仪表盘
+            [
+                'key' => 'dashboard',
+                'name' => '仪表盘',
+                'type' => 2,
+                'pid' => null,
+                'path' => '/admin/dashboard',
+                'component' => 'dashboard',
+                'icon' => 'HomeFilled',
+                'sort' => 0,
+            ],
+
+            // 仪表盘 API
+            [
+                'key' => 'dashboard_index',
+                'name' => '查看后台仪表盘',
+                'type' => 3,
+                'pid' => 'dashboard',
+                'permission_code' => 'admin.dashboard.index:get',
+                'sort' => 0,
+            ],
+
             // 权限管理目录
             [
                 'key' => 'permission',
                 'name' => '权限管理',
                 'type' => 1,
                 'pid' => null,
-                'icon' => 'Crop',
+                'icon' => 'Lightning',
                 'sort' => 1,
             ],
+
             [
                 'key' => 'admins',
                 'name' => '管理员管理',
@@ -49,28 +73,6 @@ class PermissionSeeder extends Seeder
                 'icon' => 'Menu',
                 'developer_only' => 1,
                 'sort' => 0,
-            ],
-
-            // 仪表盘
-            [
-                'key' => 'dashboard',
-                'name' => '仪表盘',
-                'type' => 2,
-                'pid' => null,
-                'path' => '/admin/dashboard',
-                'component' => 'dashboard',
-                'icon' => 'HomeFilled',
-                'sort' => 0,
-            ],
-
-            // 通用设置目录
-            [
-                'key' => 'settings',
-                'name' => '通用设置',
-                'type' => 1,
-                'pid' => null,
-                'icon' => 'Setting',
-                'sort' => 2,
             ],
 
             // 菜单管理 API
@@ -261,14 +263,67 @@ class PermissionSeeder extends Seeder
                 'sort' => 7,
             ],
 
-            // 仪表盘 API
+            // 设置目录
             [
-                'key' => 'dashboard_index',
-                'name' => '查看后台仪表盘',
-                'type' => 3,
-                'pid' => 'dashboard',
-                'permission_code' => 'admin.dashboard.index:get',
+                'key' => 'settings',
+                'name' => '设置',
+                'type' => 1,
+                'pid' => null,
+                'icon' => 'Setting',
+                'sort' => 2,
+            ],
+
+            [
+                'key' => 'settings_page',
+                'name' => '通用设置',
+                'type' => 2,
+                'pid' => 'settings',
+                'path' => '/admin/settings',
+                'component' => 'admin/SettingManagement',
+                'icon' => 'Tools',
                 'sort' => 0,
+            ],
+
+            // 设置 API
+            [
+                'key' => 'setting_index',
+                'name' => '设置列表',
+                'type' => 3,
+                'pid' => 'settings_page',
+                'permission_code' => 'admin.settings.index:get',
+                'sort' => 0,
+            ],
+            [
+                'key' => 'setting_store',
+                'name' => '新增设置',
+                'type' => 3,
+                'pid' => 'settings_page',
+                'permission_code' => 'admin.settings.store:post',
+                'sort' => 1,
+            ],
+            [
+                'key' => 'setting_show',
+                'name' => '设置详情',
+                'type' => 3,
+                'pid' => 'settings_page',
+                'permission_code' => 'admin.settings.show:get',
+                'sort' => 2,
+            ],
+            [
+                'key' => 'setting_update',
+                'name' => '更新设置',
+                'type' => 3,
+                'pid' => 'settings_page',
+                'permission_code' => 'admin.settings.update:put',
+                'sort' => 3,
+            ],
+            [
+                'key' => 'setting_destroy',
+                'name' => '删除设置',
+                'type' => 3,
+                'pid' => 'settings_page',
+                'permission_code' => 'admin.settings.destroy:delete',
+                'sort' => 4,
             ],
         ];
 

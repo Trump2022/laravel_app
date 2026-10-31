@@ -3,19 +3,31 @@ import { createRouter, createWebHistory } from 'vue-router';
 import AdminManagement from './components/admin/AdminManagement.vue';
 import RoleManagement from './components/admin/RoleManagement.vue';
 import PermissionManagement from './components/admin/PermissionManagement.vue';
+import SettingManagement from './components/admin/SettingManagement.vue';
+import Home from './Home.vue';
 
 export const pageRouteNames = {
     dashboard: 'admin-dashboard',
     admins: 'admin-admins',
     roles: 'admin-roles',
     permissions: 'admin-permissions',
+    settings: 'admin-settings',
 };
 
 export default createRouter({
-    history: createWebHistory('/manage/'),
+    history: createWebHistory('/'),
     routes: [
         {
             path: '/',
+            redirect: { name: 'web-home' },
+        },
+        {
+            path: '/web',
+            name: 'web-home',
+            component: Home,
+        },
+        {
+            path: '/admin',
             redirect: { name: pageRouteNames.dashboard },
         },
         {
@@ -51,8 +63,23 @@ export default createRouter({
             },
         },
         {
+            path: '/admin/settings',
+            name: pageRouteNames.settings,
+            component: SettingManagement,
+            meta: {
+                page: 'settings',
+                title: '站点设置',
+                withAdmin: true,
+            },
+        },
+
+        {
+            path: '/admin/:pathMatch(.*)*',
+            redirect: { name: pageRouteNames.dashboard },//所有未匹配的/admin/开头的路径都重定向到仪表盘
+        },
+        {
             path: '/:pathMatch(.*)*',
-            redirect: { name: pageRouteNames.admins },
+            redirect: { name: 'web-home' },//其它未匹配的路径都去首页
         },
     ],
 });
